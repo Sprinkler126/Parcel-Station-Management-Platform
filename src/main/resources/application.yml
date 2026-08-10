@@ -59,7 +59,7 @@ app:
     alert-hours: 72
   # 入库并发冲突的事务外重试次数
   inbound:
-    max-retry: 3
+    max-retry: 8
   # 种子数据：仅在非 test profile 下装载
   seed:
     enabled: true

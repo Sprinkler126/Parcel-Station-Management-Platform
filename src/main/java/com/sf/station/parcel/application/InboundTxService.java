@@ -59,13 +59,22 @@ public class InboundTxService {
 
     @Transactional
     public Parcel inbound(InboundCommand cmd) {
+        return inbound(cmd, 0);
+    }
+
+    /**
+     * @param attempt 重试轮次，0 为首次。用于让 AUTO 取号在重试时叠加游标抖动，
+     *                避免并发线程锁步撞在同一个序号上
+     */
+    @Transactional
+    public Parcel inbound(InboundCommand cmd, int attempt) {
         LocalDateTime now = LocalDateTime.now(clock);
 
         ContactInfo contact = contactResolver.resolve(cmd.contactNo(), cmd.manualSuffix());
         CodeSource mode = cmd.codeMode() == null ? CodeSource.AUTO : cmd.codeMode();
 
         // 1. 选排 + 选号
-        SeqPick pick = resolveSeq(cmd, mode, now);
+        SeqPick pick = resolveSeq(cmd, mode, now, attempt);
         CodeSpace space = pick.space();
         int seq = pick.seq();
         LocalDateTime boundary = cooldownQuery.boundary(space, now);
@@ -111,7 +120,7 @@ public class InboundTxService {
     private record SeqPick(CodeSpace space, int seq, boolean forced, Long victimId) {
     }
 
-    private SeqPick resolveSeq(InboundCommand cmd, CodeSource mode, LocalDateTime now) {
+    private SeqPick resolveSeq(InboundCommand cmd, CodeSource mode, LocalDateTime now, int attempt) {
         if (mode == CodeSource.MANUAL) {
             // MANUAL：先归一化再校验。不归一化，唯一索引形同虚设
             PickupCodeVO code = PickupCodeNormalizer.normalize(cmd.pickupCode());
@@ -122,7 +131,7 @@ public class InboundTxService {
 
         // AUTO
         CodeSpace space = allocation.resolveSpace(cmd.scope(), cmd.codePrefix(), now);
-        OptionalInt seq = allocation.allocateSeq(space, now);
+        OptionalInt seq = allocation.allocateSeq(space, now, attempt);
         if (seq.isPresent()) {
             return new SeqPick(space, seq.getAsInt(), false, null);
         }

@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
@@ -28,6 +29,9 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class CodeAllocationService {
+
+    /** 重试时游标抖动的最大跨度，用于把并发线程在码空间上散开 */
+    private static final int JITTER_SPAN = 64;
 
     private final ParcelRepository parcelRepo;
     private final CodeSpaceRepository spaceRepo;
@@ -106,8 +110,29 @@ public class CodeAllocationService {
      * @return 空表示该排码空间耗尽
      */
     public OptionalInt allocateSeq(CodeSpace space, LocalDateTime now) {
+        return allocateSeq(space, now, 0);
+    }
+
+    /**
+     * AUTO 模式取号，带重试轮次。
+     *
+     * <p><b>为什么重试要加游标抖动</b>：并发线程各自加载到的是同一份位图，
+     * next-fit 会让它们算出<b>同一个</b>序号，于是全部撞在唯一索引上；
+     * 下一轮重新加载位图后又会再次算出同一个新序号，冲突以锁步方式持续，
+     * 重试次数很快耗尽（实测 8 线程时必然失败）。
+     *
+     * <p>因此重试轮次 &gt; 0 时给游标叠加一个随机偏移，把并发线程在码空间上散开。
+     * 这<b>不是</b>被禁止的"序号简单加一"——位图仍然整体重新加载，
+     * 抖动只改变 next-fit 的搜索起点，不假设某个具体序号可用。
+     */
+    public OptionalInt allocateSeq(CodeSpace space, LocalDateTime now, int attempt) {
         List<Integer> occupied = occupiedSeqs(space, now);
-        return CodeAllocator.nextFit(space.getCapacity(), space.getCursorPos(), occupied);
+        int cursor = space.getCursorPos();
+        if (attempt > 0) {
+            int span = Math.min(space.getCapacity(), JITTER_SPAN);
+            cursor += ThreadLocalRandom.current().nextInt(span);
+        }
+        return CodeAllocator.nextFit(space.getCapacity(), cursor, occupied);
     }
 
     /** 批量取号，一次加载位图取 N 个 */

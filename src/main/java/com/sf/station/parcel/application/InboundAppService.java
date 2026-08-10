@@ -60,7 +60,7 @@ public class InboundAppService {
         int maxRetry = Math.max(1, props.getInbound().getMaxRetry());
         for (int i = 0; i < maxRetry; i++) {
             try {
-                return txService.inbound(cmd);
+                return txService.inbound(cmd, i);
             } catch (DataIntegrityViolationException e) {
                 String msg = rootMessage(e);
 
