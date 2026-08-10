@@ -87,11 +87,11 @@ public class Parcel {
     private CodeSource codeSource;
 
     /** 1=占用或冷却中，NULL=已回炉。见 INV-1 */
-    @Column(name = "code_slot_flag")
+    @Column(name = "code_slot_flag", columnDefinition = "tinyint")
     private Integer codeSlotFlag;
 
     /** 1=EMERGENCY 档提前复用，列表页需显示"提前复用"标记提醒核对 */
-    @Column(name = "code_reuse_forced")
+    @Column(name = "code_reuse_forced", columnDefinition = "tinyint")
     private Integer codeReuseForced;
 
     // ---------- 状态 ----------
@@ -101,7 +101,7 @@ public class Parcel {
     private ParcelStatus status;
 
     /** 1=未完结，NULL=终态。见 INV-1 */
-    @Column(name = "active_flag")
+    @Column(name = "active_flag", columnDefinition = "tinyint")
     private Integer activeFlag;
 
     @Column(name = "inbound_at", nullable = false)

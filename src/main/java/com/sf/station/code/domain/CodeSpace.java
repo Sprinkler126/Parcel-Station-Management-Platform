@@ -44,7 +44,7 @@ public class CodeSpace {
     @Column(name = "tier", nullable = false, length = 12)
     private Tier tier;
 
-    @Column(name = "enabled", nullable = false)
+    @Column(name = "enabled", nullable = false, columnDefinition = "tinyint")
     private int enabled;
 
     @Column(name = "updated_at", nullable = false)
