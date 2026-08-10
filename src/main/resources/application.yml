@@ -1,0 +1,80 @@
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  application:
+    name: station-parcel
+
+  # H2 以 MySQL 兼容模式启动，使 Flyway 脚本在两种数据库上通用。
+  # AUTO_SERVER=TRUE 允许并发测试用例以多连接访问同一文件库。
+  datasource:
+    url: jdbc:h2:file:./data/station;MODE=MySQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ''
+    hikari:
+      pool-name: station-pool
+      maximum-pool-size: 20
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      # schema 由 Flyway 管理，Hibernate 只做校验，杜绝实体与脚本漂移
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        format_sql: false
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+app:
+  # 冷却自适应参数（文档 §9.1 定稿值）
+  cooldown:
+    min-days: 3
+    max-days: 90
+    buffer-days: 3
+    default-days: 7
+    tight-threshold: 0.30
+    emergency-threshold: 0.10
+    ewma-alpha: 0.3
+    # EWMA 统计窗口
+    stat-window-days: 14
+  # 滞留分级阈值（小时）
+  overdue:
+    warn-hours: 48
+    alert-hours: 72
+  # 入库并发冲突的事务外重试次数
+  inbound:
+    max-retry: 3
+  # 种子数据：仅在非 test profile 下装载
+  seed:
+    enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    root: INFO
+    com.sf.station: INFO
+  pattern:
+    console: '%d{HH:mm:ss.SSS} %-5level [%X{traceId}] %logger{36} - %msg%n'

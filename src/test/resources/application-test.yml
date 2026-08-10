@@ -1,0 +1,38 @@
+# 测试 profile：内存库 + 关闭种子数据
+#
+# 注意并发用例（TC-07）：H2 内存库需带 DB_CLOSE_DELAY=-1 保证连接池各连接看到同一个库，
+# 且并发用例本身不能加 @Transactional（测试事务会阻断跨线程可见性）。
+spring:
+  datasource:
+    url: jdbc:h2:mem:station_test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ''
+    hikari:
+      maximum-pool-size: 10
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    clean-disabled: false
+
+  h2:
+    console:
+      enabled: false
+
+app:
+  seed:
+    enabled: false
+
+logging:
+  level:
+    root: WARN
+    com.sf.station: INFO
