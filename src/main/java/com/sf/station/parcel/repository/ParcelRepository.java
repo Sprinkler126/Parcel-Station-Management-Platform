@@ -257,6 +257,14 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long>,
             """)
     int countCoolingByPrefix(@Param("prefix") String prefix, @Param("boundary") LocalDateTime boundary);
 
+    /** 设置容量时的安全边界：仍持有码槽的最大序号。 */
+    @Query("select coalesce(max(p.codeSeq), 0) from Parcel p where p.codePrefix = :prefix and p.codeSlotFlag = 1")
+    int findMaxHeldSeqByPrefix(@Param("prefix") String prefix);
+
+    /** 停用前必须确认没有任何在库或冷却槽位。 */
+    @Query("select count(p) from Parcel p where p.codePrefix = :prefix and p.codeSlotFlag = 1")
+    long countHeldSlotsByPrefix(@Param("prefix") String prefix);
+
     /** 近 N 天该排的每日入库计数，用于 EWMA */
     @Query("""
             select cast(p.inboundAt as date), count(p) from Parcel p

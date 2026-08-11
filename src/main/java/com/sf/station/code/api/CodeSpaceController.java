@@ -1,9 +1,12 @@
 package com.sf.station.code.api;
 
 import com.sf.station.code.api.dto.CooldownPolicyLogVO;
+import com.sf.station.code.api.dto.CodeSpaceCreateRequest;
+import com.sf.station.code.api.dto.CodeSpaceUpdateRequest;
 import com.sf.station.code.api.dto.CooldownSettingRequest;
 import com.sf.station.code.api.dto.SpaceAvailabilityVO;
 import com.sf.station.code.application.CodeSpaceQueryService;
+import com.sf.station.code.application.CodeSpaceAdminService;
 import com.sf.station.code.application.CooldownPolicyApplier;
 import com.sf.station.code.domain.CooldownDecision;
 import com.sf.station.common.ApiResponse;
@@ -15,6 +18,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,10 +37,13 @@ public class CodeSpaceController {
 
     private final CodeSpaceQueryService query;
     private final CooldownPolicyApplier applier;
+    private final CodeSpaceAdminService admin;
 
-    public CodeSpaceController(CodeSpaceQueryService query, CooldownPolicyApplier applier) {
+    public CodeSpaceController(CodeSpaceQueryService query, CooldownPolicyApplier applier,
+                               CodeSpaceAdminService admin) {
         this.query = query;
         this.applier = applier;
+        this.admin = admin;
     }
 
     @GetMapping
@@ -44,9 +52,33 @@ public class CodeSpaceController {
         return ApiResponse.ok(query.availability());
     }
 
+    @GetMapping("/all")
+    @Operation(summary = "列出全部货架排（包含已停用）")
+    public ApiResponse<List<SpaceAvailabilityVO>> all() {
+        return ApiResponse.ok(query.allAvailability());
+    }
+
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "新增货架排")
+    public ResponseEntity<ApiResponse<SpaceAvailabilityVO>> create(
+            @Valid @RequestBody CodeSpaceCreateRequest req) {
+        String prefix = admin.create(req).getPrefix();
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(query.availability(prefix)));
+    }
+
     @GetMapping("/{prefix}")
     @Operation(summary = "单排可用性")
     public ApiResponse<SpaceAvailabilityVO> one(@PathVariable String prefix) {
+        return ApiResponse.ok(query.availability(prefix));
+    }
+
+    @PutMapping(value = "/{prefix}/settings", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "修改容量与启用状态")
+    public ApiResponse<SpaceAvailabilityVO> update(
+            @PathVariable String prefix,
+            @Valid @RequestBody CodeSpaceUpdateRequest req) {
+        admin.update(prefix, req);
         return ApiResponse.ok(query.availability(prefix));
     }
 

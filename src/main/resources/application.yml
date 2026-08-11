@@ -45,17 +45,6 @@ spring:
     baseline-on-migrate: true
 
 app:
-  # 冷却自适应参数（文档 §9.1 定稿值）
-  cooldown:
-    min-days: 3
-    max-days: 90
-    buffer-days: 3
-    default-days: 7
-    tight-threshold: 0.30
-    emergency-threshold: 0.10
-    ewma-alpha: 0.3
-    # EWMA 统计窗口
-    stat-window-days: 14
   # 滞留分级阈值（小时）
   overdue:
     warn-hours: 48

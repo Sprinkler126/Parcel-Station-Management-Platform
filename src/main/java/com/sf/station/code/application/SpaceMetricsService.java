@@ -1,8 +1,8 @@
 package com.sf.station.code.application;
 
 import com.sf.station.code.domain.CodeSpace;
+import com.sf.station.code.domain.CooldownConfig;
 import com.sf.station.code.domain.SpaceMetrics;
-import com.sf.station.common.AppProperties;
 import com.sf.station.parcel.repository.ParcelRepository;
 import java.sql.Date;
 import java.time.Clock;
@@ -27,14 +27,12 @@ public class SpaceMetricsService {
 
     private final ParcelRepository parcelRepo;
     private final CooldownQueryService cooldownQuery;
-    private final AppProperties props;
     private final Clock clock;
 
     public SpaceMetricsService(ParcelRepository parcelRepo, CooldownQueryService cooldownQuery,
-                               AppProperties props, Clock clock) {
+                               Clock clock) {
         this.parcelRepo = parcelRepo;
         this.cooldownQuery = cooldownQuery;
-        this.props = props;
         this.clock = clock;
     }
 
@@ -53,12 +51,13 @@ public class SpaceMetricsService {
         int inStock = parcelRepo.countInStockByPrefix(space.getPrefix());
         int cooling = parcelRepo.countCoolingByPrefix(space.getPrefix(), boundary);
 
-        int window = props.getCooldown().getStatWindowDays();
+        CooldownConfig config = cooldownQuery.config();
+        int window = config.statWindowDays();
         LocalDateTime from = now.minusDays(window);
         double dailyInbound = ewma(parcelRepo.dailyInboundCounts(space.getPrefix(), from),
-                now.toLocalDate(), window);
+                now.toLocalDate(), window, config.ewmaAlpha());
         double dailyPickup = ewma(parcelRepo.dailyOutboundCounts(space.getPrefix(), from),
-                now.toLocalDate(), window);
+                now.toLocalDate(), window, config.ewmaAlpha());
 
         return new SpaceMetrics(space.getPrefix(), space.getCapacity(),
                 inStock, cooling, dailyInbound, dailyPickup);
@@ -74,7 +73,7 @@ public class SpaceMetricsService {
      * <p>α 取 0.3：近 3~4 天的样本占约 76% 权重，既能跟上双十一这类周期性起量，
      * 又不会被单日异常值带偏。
      */
-    private double ewma(List<Object[]> dailyCounts, LocalDate today, int window) {
+    private double ewma(List<Object[]> dailyCounts, LocalDate today, int window, double alpha) {
         Map<LocalDate, Long> byDay = new HashMap<>();
         for (Object[] row : dailyCounts) {
             LocalDate d = toLocalDate(row[0]);
@@ -82,7 +81,6 @@ public class SpaceMetricsService {
                 byDay.put(d, ((Number) row[1]).longValue());
             }
         }
-        double alpha = props.getCooldown().getEwmaAlpha();
         double ewma = 0;
         boolean seeded = false;
         // 从最早一天推到今天，缺失日补 0

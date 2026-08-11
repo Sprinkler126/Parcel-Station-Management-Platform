@@ -1,205 +1,168 @@
-# 末端驿站包裹管理系统
+# 末端驿站包裹管理平台
 
-单站点末端驿站包裹管理原型。功能面刻意收敛，深度投向四条主线：
-**取件码作为可循环资源的生命周期管理**、**隐私面单下的手机号双职责拆分**、
-**并发与幂等的正确性**、**时间规则的可测试性**。
+一个面向单站点驿站的包裹管理系统，覆盖连续入库、取件核销、包裹查询、运营看板、
+货架配置和取件码冷却管理。项目重点不只是完成增删改查，还处理了取件码循环复用、
+隐私面单、并发入库、状态幂等和动态容量安全等实际业务问题。
 
-实现依据：`docs/01-需求与实施文档.md`（开发实施文档 v4 定稿）。
+## 功能概览
 
----
+### 1. 连续入库
 
-## 一、启动方式
+- 支持系统分配和手动完整取件码。
+- 系统分配包含三种范围：指定排、指定货架、全站。
+- 指定排时通过“货架 → 排号”二级方格选择，选项来自站点当前启用的货架配置。
+- 入库前实时预览推荐码；手动码发生占用或冷却冲突时返回明确原因和建议码。
+- 提交成功后保留快递公司、操作员和货架选择，只清空本件信息，适合连续扫码作业。
+- 本班次结果以栈形式保留，最新一单位于栈顶；撤销操作只作用于栈顶记录。
 
-### 环境要求
+![连续入库](docs/screenshots/continuous-inbound.png)
 
-| 项目 | 版本 |
-| ---- | ---- |
-| JDK | 17+ |
-| Maven | 3.9+ |
-| 数据库 | 无需安装，内置 H2 文件模式 |
+### 2. 取件工作台
 
-### 一条命令启动
+- 支持按完整取件码核销，也可按手机尾号查询待取包裹。
+- 自动聚合同一客户的多件包裹，支持勾选后批量交付。
+- 展示收件人、脱敏联系方式、快递公司、运单尾号和滞留等级。
+- 批量操作逐件返回结果，避免部分失败时把整批请求伪装成全部成功。
+
+![取件工作台](docs/screenshots/pickup-counter.png)
+
+### 3. 包裹查询与运营处理
+
+- 支持取件码、姓名、真实尾号、运单号、联系号、状态和货架排组合查询。
+- 支持待取件、已取件、退回件等状态筛选，以及正常、滞留、严重滞留分级。
+- 可直接完成确认取件、催取、补录真实尾号、备注和异常处理。
+- 查询条件组合后同时生效，避免“填写多个条件但实际只使用一个”的歧义。
+
+![包裹查询](docs/screenshots/parcel-query.png)
+
+### 4. 站点与货架设置
+
+- 新增货架排，配置排内容量，并控制是否允许继续分配新包裹。
+- 缩容时校验仍被占用的最大序号；存在在库或冷却槽位时禁止直接停用。
+- 支持自动冷却和手动冷却，手动值必须通过当前容量压力下的安全上限校验。
+- 全局可设置最短/最长冷却天数、默认天数、预留入库天数、统计窗口、
+  紧张/紧急阈值和 EWMA 权重。
+- 保存全局规则后立即触发自动货架重算，并保留完整决策日志。
+
+![站点设置](docs/screenshots/station-settings.png)
+
+### 5. 数据看板
+
+- 展示当日入库、取件、在库、催取和异常统计。
+- 按快递公司查看包裹分布。
+- 查看每个码空间的容量、在库、冷却、可用率和风险档位。
+
+## 关键设计思路
+
+### 取件码是可循环资源
+
+取件码不是一次性字符串，而是有独立生命周期的货位资源：
+
+```text
+可用 → 入库占用 → 取件后冷却 → 冷却结束回炉 → 再次可用
+```
+
+包裹取走后，运单生命周期已经结束，但取件码仍处于冷却期。系统分别使用
+`active_flag` 和 `code_slot_flag` 表达两条生命周期，并通过数据库唯一索引守住
+“活动运单唯一”和“取件码槽位唯一”两条底线。
+
+### 分配范围语义明确
+
+| 范围 | 固定部分 | 系统决定部分 |
+| --- | --- | --- |
+| 指定排 `ROW` | 货架号、排号 | 最后一段可用序号 |
+| 指定货架 `SHELF` | 货架号 | 排号、可用序号 |
+| 全站 `FULL` | 无 | 货架、排号、可用序号 |
+
+分配采用 next-fit 搜索，并加载真实占用/冷却位图。并发线程撞到数据库唯一约束后，
+会重新读取最新位图并从随机偏移位置重试，避免所有线程锁步争抢同一个序号。
+
+### 状态变化必须幂等且可追溯
+
+确认取件、撤销取件、撤销入库等操作都使用带前置状态的原子更新，例如只允许
+`PENDING → PICKED_UP`。更新行数为 0 时重新读取当前状态并返回具体业务错误，
+不会把重复请求静默处理成成功。
+
+所有状态变化追加写入 `parcel_event`，冷却策略决策写入
+`cooldown_policy_log`，便于还原操作人、时间、指标快照和决策原因。
+
+### 隐私面单与真实尾号分离
+
+系统区分真实手机号、掩码号和 AXB 虚拟号。展示和联系使用面单联系号，
+按尾号取件则使用单独的 `real_suffix`。无法从隐私面单得到真实尾号时允许后续补录，
+避免把虚拟号后四位误当成客户真实手机尾号。
+
+### 自适应冷却兼顾安全与周转
+
+自动策略基于货架容量、当前在库和近期进出库速度计算：
+
+```text
+buffer = ceil(日均入库 × 预留入库天数)
+raw    = floor((容量 − 在库 − buffer) / max(日均取件, 1))
+target = clamp(raw, minDays, maxDays)
+```
+
+可用率跌破紧张或紧急阈值时优先压缩到最短冷却期。容量收紧时一次下调到位；
+容量宽裕时每次最多增加 1 天，并使用滞回带避免策略反复抖动。所有参数均可在站点设置中调整。
+
+## 技术栈
+
+| 层次 | 技术 |
+| --- | --- |
+| 后端 | Java 17、Spring Boot 3.3、Spring MVC、Spring Data JPA |
+| 数据库 | MySQL 8.4 / H2，Flyway 管理结构版本 |
+| 前端 | 原生 HTML、CSS、JavaScript，由 Spring Boot 直接托管 |
+| 接口文档 | Springdoc OpenAPI / Swagger UI |
+| 测试 | JUnit 5、MockMvc、H2、可推进的 `MutableClock` |
+
+## 快速启动
+
+### 使用内置 H2
+
+环境要求：JDK 17+、Maven 3.9+。
 
 ```bash
 mvn spring-boot:run
 ```
 
-启动后浏览器直达：
-
-| 入口 | 地址 |
-| ---- | ---- |
-| 前端主页 | http://localhost:8080/ |
-| Swagger UI | http://localhost:8080/swagger-ui.html |
-| H2 控制台 | http://localhost:8080/h2-console |
-
-H2 控制台连接串：`jdbc:h2:file:./data/station;MODE=MySQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE`，
-用户名 `sa`，密码为空。
-
-### 运行测试
+### 使用 MySQL Docker
 
 ```bash
-mvn test                          # 全部用例
-mvn test -Dgroups=showcase        # 建议评审的 10 条核心用例
-```
+docker run --name parcel-station-mysql \
+  -e MYSQL_ROOT_PASSWORD=root \
+  -e MYSQL_DATABASE=station \
+  -p 3306:3306 -d mysql:8.4
 
-测试全部基于 JUnit 5 + MockMvc + H2，一条命令可重复执行，
-**不依赖外部环境、不使用 `Thread.sleep`**——时间相关的边界一律靠推进 `MutableClock` 验证。
-
-### 切换 MySQL
-
-```bash
 mvn spring-boot:run -Dspring-boot.run.profiles=mysql
 ```
 
-前置仅需手工建库。由于 H2 已以 `MODE=MySQL` 运行，`db/migration` 下的 Flyway
-脚本无需任何改动即可在 MySQL 执行。详见 `src/main/resources/application-mysql.yml`。
+MySQL 连接信息可以通过 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DB`、`MYSQL_USER`、
+`MYSQL_PASSWORD` 环境变量覆盖。首次启动时 Flyway 会自动创建表结构。
 
----
+启动后可访问：
 
-## 二、技术选型理由
+| 页面 | 地址 |
+| --- | --- |
+| 产品与功能入口 | <http://localhost:8080/> |
+| 连续入库 | <http://localhost:8080/inbound.html> |
+| 取件工作台 | <http://localhost:8080/pickup.html> |
+| 包裹查询 | <http://localhost:8080/query.html> |
+| 数据看板 | <http://localhost:8080/dashboard.html> |
+| 站点设置 | <http://localhost:8080/settings.html> |
+| Swagger UI | <http://localhost:8080/swagger-ui.html> |
 
-| 选型 | 理由 |
-| ---- | ---- |
-| Spring Boot 3 + JDK 17 | 文档指定；record、文本块、switch 表达式让纯函数与 DTO 写得更干净 |
-| H2 文件模式 + `MODE=MySQL` | 免安装，`mvn spring-boot:run` 即可跑；同时让 Flyway 脚本在两种库上通用 |
-| Flyway | schema 版本化。配合 `ddl-auto: validate`，实体与脚本一旦漂移<b>启动即失败</b> |
-| Spring Data JPA | 派生查询省样板；关键路径用 `@Query` 手写 JPQL 保持可控 |
-| Vue 3 CDN 版 | 零 npm 构建，评审者不需要装 Node |
+## 测试
 
-一个有意的取舍：`spring.jpa.hibernate.ddl-auto` 设为 `validate` 而非 `none`。
-开发期这一设置已经真实拦下一次事故——实体把 `tinyint` 列映射成了 `INTEGER`，
-启动直接报 `Schema-validation: wrong column type`，而不是等到运行时数据异常才发现。
-
----
-
-## 三、已实现与未实现范围
-
-### 已实现
-
-| 编号 | 功能 | 状态 |
-| ---- | ---- | ---- |
-| F1 | 包裹入库（AUTO / MANUAL、归一化、冲突诊断） | ✅ |
-| F5 | 取件码生成与循环复用（next-fit、ROW/SHELF/FULL） | ✅ |
-| F6 | 冷却期派生判定与按需自愈 | ✅ 判定与自愈完成，回炉定时任务待接 |
-| F14 | 联系方式解析（真实号 / 掩码号 / AXB 虚拟号） | ✅ |
-| INV-1~6 | 六条核心不变量 | ✅ 已落地并有用例守护 |
-
-### 进行中 / 未完成
-
-| 编号 | 功能 | 说明 |
-| ---- | ---- | ---- |
-| F2 | 待取件查询（分层检索） | ⬜ 仓储方法已备齐，缺 QueryService 与 Controller |
-| F3 | 确认取件 | ⬜ `markPickedUp` 原子更新已写，缺 PickupService |
-| F4 | 滞留标识 | ✅ 计算逻辑已在 `ParcelVO` 完成，随查询接口一并暴露 |
-| F7 | 冷却自适应调节 | ⬜ 纯函数 `CooldownPolicy` 已完成并可单测，缺 Applier 与定时触发 |
-| F8 | 扫码连续入库 | ⬜ 后端预览接口逻辑已备（`CodeAllocationService.preview`），缺 Controller 与前端 |
-| F9~F12 | 批量取件 / 撤销 / 催取 / 看板 | ⬜ |
-| F13 | 22 条测试用例 | 🔶 已完成 9 条 |
-| P2 | 拒收退回、异常件标记 | 🔶 `markReturned` 已写，缺接口 |
-| P3 | 短信、多站点、鉴权、密文盲索引 | ⬜ 不实现，见演进方向 |
-
-### 不实现（仅写入演进方向）
-
-短信通知、多站点码空间隔离、账号鉴权、手机号密文与盲索引、
-ShedLock 分布式互斥、计数器表取号。
-
----
-
-## 四、六条核心不变量的落地位置
-
-| 不变量 | 落地位置 |
-| ------ | -------- |
-| **INV-1** 两个生命周期相互独立 | `Parcel.activeFlag` / `Parcel.codeSlotFlag` 两个字段 + `V1__init.sql` 两条唯一索引 |
-| **INV-2** 唯一性由数据库兜底 | `InboundTxService` 直接 insert 撞索引，查询只用于生成友好提示 |
-| **INV-3** 只落原始事实 | `ParcelRepository.findOccupiedSeqs` 以 `outboundAt` 与 boundary 实时比较判定冷却 |
-| **INV-4** 时间取自注入的 Clock | `ClockConfig`；测试用 `MutableClock` 覆盖 |
-| **INV-5** 带前置条件的原子更新 | `markPickedUp` / `markCancelPickup` 等一律 `where id=? and status=?` |
-| **INV-6** 状态变更写流水且不覆盖 | `EventRecorder`；撤销追加 `CANCEL_PICKUP` 而非改回原值 |
-
----
-
-## 五、开发期的三个发现
-
-### 1. H2 的多 NULL 唯一索引语义已实测验证
-
-整套 INV-1 建立在"唯一索引允许多个 NULL"之上。动手前先用 H2 2.2.224
-（`MODE=MySQL`）直接验证：两行 `('SF1', NULL)` 可共存，
-第二行 `('SF1', 1)` 与第二个 `('15-1-2', 1)` 均被 `23505` 拒绝。结论成立，方案可行。
-
-### 2. 并发重试会锁步撞号（文档未覆盖）
-
-文档要求"重试时重新加载位图，不要把序号简单加一"。照此实现后，
-2 线程通过，**8 线程必然失败**。
-
-原因：并发线程加载到的是同一份位图，next-fit 必然算出**同一个**序号；
-重试后重新加载位图，又会再次算出同一个新序号——冲突以锁步方式持续，
-重试次数很快耗尽。
-
-解法：重试轮次 > 0 时给 next-fit 的**搜索起点**叠加随机偏移（跨度 64），
-把并发线程在码空间上散开。位图仍整体重新加载，不假设任何具体序号可用，
-因此不违反"禁止序号加一"这条禁令。见 `CodeAllocationService.allocateSeq(space, now, attempt)`。
-
-### 3. 掩码号不能用统一的号码归一化
-
-若在解析前统一去掉连字符，`138----5678` 会被压成 `1385678` 从而漏判。
-故拆成两级：`stripBlank` 保留掩码字符供掩码号判定，
-`normalize` 再去连字符供真实号与虚拟号判定。见 `PhoneNormalizer`。
-
----
-
-## 六、仓库结构
-
-```
-webapp/
-├── README.md
-├── pom.xml
-├── docs/
-│   └── 01-需求与实施文档.md          原始开发实施文档 v4
-├── src/main/java/com/sf/station/
-│   ├── common/                      ApiResponse BizException ErrorCode
-│   │                                GlobalExceptionHandler ClockConfig TraceIdFilter AppProperties
-│   ├── parcel/
-│   │   ├── domain/                  Parcel ParcelStatus ParcelEvent EventType OverdueLevel CodeSource
-│   │   ├── repository/              ParcelRepository ParcelEventRepository
-│   │   ├── application/             InboundAppService  ← 事务外层，承载重试
-│   │   │                            InboundTxService   ← @Transactional 事务单元
-│   │   │                            EventRecorder ParcelAssembler
-│   │   └── api/                     ParcelController + dto/
-│   ├── code/
-│   │   ├── domain/                  CodeSpace PickupCodeVO PickupCodeNormalizer CodeAllocator
-│   │   │                            CooldownPolicy SpaceMetrics CooldownDecision Tier AllocScope
-│   │   ├── repository/              CodeSpaceRepository CooldownPolicyLogRepository
-│   │   └── application/             CodeAllocationService CooldownQueryService
-│   ├── contact/                     ContactResolver PhoneNormalizer ContactInfo
-│   └── stats/
-├── src/main/resources/
-│   ├── db/migration/V1__init.sql
-│   ├── static/                      Vue 3 CDN 单页
-│   ├── application.yml  application-mysql.yml
-└── src/test/java/com/sf/station/
-    ├── support/                     BaseIntegrationTest MutableClock TestClockConfig
-    ├── unit/                        纯函数单测
-    └── integration/                 MockMvc 用例
+```bash
+mvn test
 ```
 
-分层规则：Controller 只做参数绑定与 DTO 转换；事务边界一律在 `*TxService` 或 `*Service`，
-**不允许出现在 Controller**；`CodeAllocator` 与 `CooldownPolicy` 是纯函数，
-不注入任何 Repository 和 Clock，时间以参数传入。
+当前共 65 个自动化测试，覆盖取件码归一化、next-fit 分配、自适应冷却、连续入库、
+并发冲突、冷却回炉、重复请求、查询、批量取件、撤销以及站点设置安全校验。
+时间边界通过注入 `Clock` 和推进 `MutableClock` 验证，不依赖休眠等待。
 
----
+## 文档
 
-## 七、当前测试清单
-
-| 编号 | 场景 | 层次 | 状态 |
-| ---- | ---- | ---- | ---- |
-| TC-01 | 扫码入库自动生成码 | MockMvc | ✅ showcase |
-| TC-02 | 连续入库三件 | MockMvc | ✅ |
-| TC-07 | 同排双线程并发入库 | SpringBootTest | ✅ showcase |
-| TC-07b | 同排八线程并发入库 | SpringBootTest | ✅ |
-| TC-08 | 运单号未完结重复入库 | MockMvc | ✅ showcase |
-| — | 联系号无法识别 → P1001 | MockMvc | ✅ |
-| — | AXB 虚拟号入库待补录 | MockMvc | ✅ |
-| — | MANUAL 归一化 `15-1-0731` → `15-1-731` | MockMvc | ✅ |
-| — | MANUAL 撞在库包裹 → P2002 含建议码 | MockMvc | ✅ |
-
-`mvn test` 当前 **9 条全绿**。剩余 TC-03/04/05/06/09~22 待补。
+- [需求与实施文档](docs/01-需求与实施文档.md)
+- [设计说明](docs/02-设计说明.md)
+- [API 文档](docs/03-API.md)

@@ -6,8 +6,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sf.station.code.domain.CodeSpace;
+import com.sf.station.code.domain.CooldownConfig;
+import com.sf.station.code.domain.CooldownSettings;
 import com.sf.station.code.repository.CodeSpaceRepository;
 import com.sf.station.code.repository.CooldownPolicyLogRepository;
+import com.sf.station.code.repository.CooldownSettingsRepository;
 import com.sf.station.parcel.domain.EventType;
 import com.sf.station.parcel.domain.Parcel;
 import com.sf.station.parcel.domain.ParcelEvent;
@@ -55,6 +58,8 @@ public abstract class BaseIntegrationTest {
     protected CodeSpaceRepository spaceRepo;
     @Autowired
     protected CooldownPolicyLogRepository policyLogRepo;
+    @Autowired
+    protected CooldownSettingsRepository cooldownSettingsRepo;
 
     @BeforeEach
     void resetDatabase() {
@@ -63,6 +68,8 @@ public abstract class BaseIntegrationTest {
         parcelRepo.deleteAllInBatch();
         policyLogRepo.deleteAllInBatch();
         spaceRepo.deleteAllInBatch();
+        cooldownSettingsRepo.deleteAllInBatch();
+        cooldownSettingsRepo.save(CooldownSettings.of(CooldownConfig.defaults(), now(), "SYSTEM"));
         seedSpaces();
     }
 

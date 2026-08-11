@@ -1,0 +1,42 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>站点设置 · 驿站工作台</title><link rel="stylesheet" href="/css/app.css"></head>
+<body><header class="topbar"><a class="brand" href="/"><span class="brand-mark">驿</span><span>末端驿站工作台</span></a><nav class="nav"><a href="/">产品介绍</a><a href="/inbound.html">入库</a><a href="/pickup.html">取件</a><a href="/query.html">查询</a><a href="/dashboard.html">看板</a><a class="active" href="/settings.html">设置</a></nav></header>
+<main class="shell"><div class="page-head"><div><div class="eyebrow">Station configuration</div><h1>站点设置</h1><p>管理货架排、容量和取件码冷却策略。高风险变更会经过后端安全校验。</p></div><div class="operator-box"><label for="settingsOperator">当前操作员</label><input id="settingsOperator" maxlength="32" placeholder="站长李"></div></div>
+<section class="settings-summary"><div><span>货架排总数</span><strong id="spaceTotal">—</strong></div><div><span>启用中</span><strong id="spaceEnabled">—</strong></div><div><span>手动冷却</span><strong id="spaceManual">—</strong></div><div><span>异常档位</span><strong id="spaceRisk">—</strong></div></section>
+<section class="card policy-settings-card">
+  <div class="section-title"><div><span class="feature-index">GLOBAL COOLDOWN POLICY</span><h2>自动冷却计算规则</h2></div><span id="policySavedAt" class="muted small">正在读取…</span></div>
+  <div class="policy-layout">
+    <form id="policySettingsForm" class="policy-form form-grid">
+      <div class="field"><label for="policyMinDays">最短冷却 minDays</label><input id="policyMinDays" type="number" min="1" max="30" required><span class="field-help">容量紧张或紧急时强制采用的下限</span></div>
+      <div class="field"><label for="policyMaxDays">最长冷却 maxDays</label><input id="policyMaxDays" type="number" min="3" max="365" required><span class="field-help">自动计算无论多宽裕都不会超过此值</span></div>
+      <div class="field"><label for="policyDefaultDays">新货架默认天数</label><input id="policyDefaultDays" type="number" min="1" max="365" required></div>
+      <div class="field"><label for="policyBufferDays">预留入库天数</label><input id="policyBufferDays" type="number" min="0" max="30" required><span class="field-help">按日均入库预留未来容量</span></div>
+      <div class="field"><label for="policyTight">紧张阈值（%）</label><input id="policyTight" type="number" min="1" max="95" step="1" required></div>
+      <div class="field"><label for="policyEmergency">紧急阈值（%）</label><input id="policyEmergency" type="number" min="1" max="90" step="1" required></div>
+      <div class="field"><label for="policyWindow">流量统计窗口（天）</label><input id="policyWindow" type="number" min="1" max="90" required></div>
+      <div class="field"><label for="policyAlpha">近期数据权重 EWMA α</label><input id="policyAlpha" type="number" min="0.05" max="1" step="0.05" required><span class="field-help">越大越重视最近一天，响应越快</span></div>
+      <div class="field full"><button id="savePolicy" class="btn btn-primary" type="submit">保存规则并重算自动货架</button></div>
+    </form>
+    <div class="formula-panel">
+      <h3>系统如何得出天数</h3>
+      <ol>
+        <li><b>统计流量</b><span>在统计窗口内，用 EWMA 计算日均入库与日均取件。</span></li>
+        <li><b>预留容量</b><code>buffer = ceil(日均入库 × 预留入库天数)</code></li>
+        <li><b>计算理论值</b><code>raw = floor((容量 − 在库 − buffer) ÷ max(日均取件, 1))</code></li>
+        <li><b>限制边界</b><code>target = clamp(raw, minDays, maxDays)</code></li>
+      </ol>
+      <p><strong>安全档位优先：</strong>可用率低于紧张阈值时直接取 minDays，低于紧急阈值时进入 EMERGENCY。缩短立即生效；延长每次最多 +1 天，并使用 20%（至少 2 天）的滞回带防止来回抖动。</p>
+    </div>
+  </div>
+</section>
+<div class="settings-grid">
+  <section class="card"><div class="section-title"><div><h2>货架排</h2><span class="muted small">货架号 18 + 排号 1 = 18-1</span></div><button id="showCreate" class="btn btn-primary btn-sm" type="button">新增货架排</button></div>
+    <form id="createSpaceForm" class="create-space is-hidden"><div class="form-grid"><div class="field"><label for="newShelf">货架号 *</label><input id="newShelf" inputmode="numeric" maxlength="3" pattern="\d{1,3}" placeholder="18" required></div><div class="field"><label for="newRow">排号 *</label><input id="newRow" inputmode="numeric" maxlength="3" pattern="\d{1,3}" value="1" required></div><div class="field"><label for="newCapacity">排内容量 *</label><input id="newCapacity" type="number" min="1" max="9999" value="9999" required></div><div class="field"><label for="newCooldownMode">初始冷却策略</label><select id="newCooldownMode"><option value="AUTO">AUTO 自动</option><option value="MANUAL">MANUAL 固定</option></select></div><div id="newCooldownField" class="field full is-hidden"><label for="newCooldownDays">固定冷却天数</label><input id="newCooldownDays" type="number" min="3" max="90" value="7"></div></div><div class="actions"><button id="createSpaceButton" class="btn btn-primary" type="submit">创建货架排</button><button id="cancelCreate" class="btn" type="button">取消</button></div></form>
+    <div class="table-wrap settings-table"><table><thead><tr><th>货架排</th><th>容量与使用</th><th>冷却策略</th><th>档位</th><th>状态</th><th></th></tr></thead><tbody id="spaceRows"></tbody></table><div id="spaceEmpty" class="empty" hidden>尚未配置货架排</div></div>
+  </section>
+  <aside id="editorCard" class="card settings-editor"><div id="editorEmpty" class="empty">选择一个货架排进行设置</div><div id="editor" hidden>
+    <div class="section-title"><div><span class="feature-index">SELECTED SPACE</span><h2 id="editorPrefix">—</h2></div><span id="editorState" class="tag">—</span></div>
+    <div class="setting-block"><h3>容量与启停</h3><p>缩容不能低于仍被占用的最大序号；有在库或冷却槽位时不能停用。</p><form id="basicSettingsForm"><div class="field"><label for="editCapacity">排内容量</label><input id="editCapacity" type="number" min="1" max="9999" required></div><label class="switch-row"><span><strong>允许新包裹分配到该排</strong><small>停用后历史包裹仍可查询和取件</small></span><input id="editEnabled" type="checkbox"><i></i></label><button id="saveBasic" class="btn btn-primary wide" type="submit">保存货架设置</button></form></div>
+    <div class="setting-block"><h3>取件码冷却</h3><p>自动模式根据容量压力调整；手动值必须通过实时安全上限校验。</p><form id="cooldownForm"><div class="field"><label for="editCooldownMode">策略模式</label><select id="editCooldownMode"><option value="AUTO">AUTO 自动调节</option><option value="MANUAL">MANUAL 固定天数</option></select></div><div id="editCooldownField" class="field"><label for="editCooldownDays">冷却天数</label><input id="editCooldownDays" type="number" min="3" max="90"></div><button id="saveCooldown" class="btn btn-primary wide" type="submit">保存冷却策略</button></form><div id="liveCalculation" class="live-calculation"></div><button id="recompute" class="btn wide" type="button">按当前规则立即重算</button><p id="recomputeResult" class="recompute-result" hidden></p></div>
+    <div class="setting-block"><div class="section-title"><h3>最近决策日志</h3><button id="refreshLogs" class="text-button" type="button">刷新</button></div><div id="policyLogs" class="policy-logs"><div class="muted small">选择后加载</div></div></div>
+  </div></aside>
+</div></main><script src="/js/app.js"></script><script src="/js/settings.js"></script></body></html>

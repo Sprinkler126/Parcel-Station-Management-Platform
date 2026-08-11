@@ -43,6 +43,12 @@ public class CodeSpaceQueryService {
         return spaceRepo.findAllEnabled().stream().map(s -> toVO(s, now)).toList();
     }
 
+    /** 设置页使用：包含已停用排。 */
+    public List<SpaceAvailabilityVO> allAvailability() {
+        LocalDateTime now = LocalDateTime.now(clock);
+        return spaceRepo.findAllByOrderByPrefixAsc().stream().map(s -> toVO(s, now)).toList();
+    }
+
     public SpaceAvailabilityVO availability(String prefix) {
         CodeSpace space = spaceRepo.findById(prefix)
                 .orElseThrow(() -> new BizException(ErrorCode.NOT_FOUND, "货架排不存在：" + prefix));
@@ -51,7 +57,7 @@ public class CodeSpaceQueryService {
 
     private SpaceAvailabilityVO toVO(CodeSpace space, LocalDateTime now) {
         SpaceMetrics m = metricsService.collect(space, now);
-        OptionalInt seq = allocation.allocateSeq(space, now);
+        OptionalInt seq = space.isEnabled() ? allocation.allocateSeq(space, now) : OptionalInt.empty();
         String nextCode = seq.isPresent() ? space.getPrefix() + "-" + seq.getAsInt() : null;
         return SpaceAvailabilityVO.of(space, m, nextCode);
     }

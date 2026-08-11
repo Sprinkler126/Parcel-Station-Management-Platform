@@ -76,14 +76,15 @@
   results.addEventListener("change", updateSelection);
 
   document.querySelector("#demoCode").addEventListener("click", async event => {
-    setBusy(event.currentTarget, true, "查找演示件…");
+    const button = event.currentTarget;
+    setBusy(button, true, "查找演示件…");
     try {
       const page = await api("/parcels?status=PENDING&page=0&size=1");
       if (!page.content.length) throw new Error("当前没有待取演示件");
       document.querySelector("#pickupCodeInput").value = page.content[0].pickupCode;
       toast(`已填入 ${page.content[0].pickupCode}，点击查询即可演示`);
     } catch (error) { toast(errorMessage(error), "error"); }
-    finally { setBusy(event.currentTarget, false); }
+    finally { setBusy(button, false); }
   });
   document.querySelector("#demoSuffix").addEventListener("click", () => { document.querySelector("#suffixInput").value = "5678"; toast("已填入演示尾号 5678，默认可聚合多件包裹"); });
 
@@ -92,7 +93,8 @@
     if (!ids.length || !confirm(`确认已核对并交付 ${ids.length} 件包裹？`)) return;
     const name = operator.value.trim() || null;
     localStorage.setItem("station.operator", name || "");
-    setBusy(event.currentTarget, true, "正在交付…");
+    const button = event.currentTarget;
+    setBusy(button, true, "正在交付…");
     try {
       if (ids.length === 1) await api(`/parcels/${ids[0]}/pickup`, { method: "POST", body: JSON.stringify({ operator: name }) });
       else {
@@ -104,6 +106,6 @@
       document.querySelector(mode === "code" ? "#pickupCodeInput" : "#suffixInput").value = "";
       document.querySelector(mode === "code" ? "#pickupCodeInput" : "#suffixInput").focus();
     } catch (error) { toast(errorMessage(error), "error"); }
-    finally { setBusy(event.currentTarget, false); }
+    finally { setBusy(button, false); }
   });
 })();

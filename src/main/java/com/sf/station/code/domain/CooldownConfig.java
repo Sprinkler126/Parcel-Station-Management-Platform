@@ -12,10 +12,11 @@ package com.sf.station.code.domain;
  * @param ewmaAlpha          0.3，近 14 天日计数平滑系数
  */
 public record CooldownConfig(int minDays, int maxDays, int bufferDays, int defaultDays,
-                             double tightThreshold, double emergencyThreshold, double ewmaAlpha) {
+                             double tightThreshold, double emergencyThreshold, double ewmaAlpha,
+                             int statWindowDays) {
 
     /** 文档定稿的默认参数 */
     public static CooldownConfig defaults() {
-        return new CooldownConfig(3, 90, 3, 7, 0.30, 0.10, 0.3);
+        return new CooldownConfig(3, 90, 3, 7, 0.30, 0.10, 0.3, 14);
     }
 }

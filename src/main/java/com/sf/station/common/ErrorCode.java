@@ -44,6 +44,10 @@ public enum ErrorCode {
 
     /** 手动冷却值超安全上限，data 为 {requested, maxAllowed} */
     COOLDOWN_UNSAFE("P3001", 400, "手动冷却值超出安全上限"),
+    /** 新增货架排时前缀已存在 */
+    CODE_SPACE_EXISTS("P3002", 409, "货架排已存在"),
+    /** 容量缩减或停用会影响仍被占用的槽位 */
+    CODE_SPACE_CONFIG_UNSAFE("P3003", 409, "货架排设置不安全"),
 
     /** 资源不存在 */
     NOT_FOUND("P4004", 404, "资源不存在"),

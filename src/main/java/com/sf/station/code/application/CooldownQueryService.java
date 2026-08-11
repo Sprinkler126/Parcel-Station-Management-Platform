@@ -2,7 +2,6 @@ package com.sf.station.code.application;
 
 import com.sf.station.code.domain.CodeSpace;
 import com.sf.station.code.domain.CooldownConfig;
-import com.sf.station.common.AppProperties;
 import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 
@@ -16,14 +15,14 @@ import org.springframework.stereotype.Service;
 @Service
 public class CooldownQueryService {
 
-    private final AppProperties props;
+    private final CooldownSettingsService settings;
 
-    public CooldownQueryService(AppProperties props) {
-        this.props = props;
+    public CooldownQueryService(CooldownSettingsService settings) {
+        this.settings = settings;
     }
 
     public CooldownConfig config() {
-        return props.toCooldownConfig();
+        return settings.config();
     }
 
     /** 该排当前生效的冷却天数，clamp 在 [minDays, maxDays] 内以防配置越界 */

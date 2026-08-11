@@ -191,6 +191,38 @@
 
 ## 4. 冷却策略接口
 
+### 4.0 站点货架设置
+
+设置页使用以下接口管理货架排：
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/code-spaces/all` | 返回全部货架排，包含已停用排 |
+| POST | `/code-spaces` | 新增货架排 |
+| PUT | `/code-spaces/{prefix}/settings` | 修改容量与启用状态 |
+
+新增 18 号货架第 1 排：
+
+```json
+{
+  "shelfNo": "18",
+  "rowNo": "1",
+  "capacity": 9999,
+  "cooldownDays": null,
+  "operator": "站长李"
+}
+```
+
+`cooldownDays=null` 表示初始使用 AUTO；填写 3~90 则创建为 MANUAL。前缀由货架号和排号归一化生成，如 `018` + `01` 最终为 `18-1`。
+
+修改基础设置：
+
+```json
+{ "capacity": 8000, "enabled": true }
+```
+
+不允许把容量缩到仍被占用的最大序号以下；存在在库或冷却槽位时不允许停用。货架排不提供物理删除，确保历史包裹始终可以还原其货位。
+
 ### 4.1 设置冷却天数
 
 `PUT /code-spaces/{prefix}/cooldown`
@@ -201,13 +233,38 @@
 
 `days=null` 表示切回 AUTO。手动值超过当前安全上限返回 `P3001`，错误数据包含 `requested` 和 `maxAllowed`。
 
-### 4.2 立即重算
+### 4.2 全局自动冷却规则
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/settings/cooldown` | 读取当前全站冷却参数 |
+| PUT | `/settings/cooldown` | 保存参数并立即重算全部自动货架 |
+
+```json
+{
+  "minDays": 3,
+  "maxDays": 90,
+  "bufferDays": 3,
+  "defaultDays": 7,
+  "tightThreshold": 0.30,
+  "emergencyThreshold": 0.10,
+  "ewmaAlpha": 0.30,
+  "statWindowDays": 14,
+  "operator": "站长李"
+}
+```
+
+`defaultDays` 必须在 `[minDays, maxDays]` 内，`emergencyThreshold` 必须低于
+`tightThreshold`。如果新边界会使已有 MANUAL 货架越界，返回 `P1001` 并在
+`conflictingSpaces` 中列出冲突货架。
+
+### 4.3 立即重算
 
 `POST /code-spaces/{prefix}/recompute`
 
 返回 `newDays`、`tier`、`changed`、`reason` 和重算后的 `availability`。
 
-### 4.3 策略日志
+### 4.4 策略日志
 
 `GET /code-spaces/{prefix}/policy-logs?limit=50`
 
@@ -253,6 +310,8 @@
 | `P2008` | 409 | 撤销失败，同运单已有新活动记录 | `activeParcelId`, `inboundAt` |
 | `P2009` | 409 | 货位繁忙，重试耗尽 | — |
 | `P3001` | 400 | 手动冷却值超过安全上限 | `requested`, `maxAllowed` |
+| `P3002` | 409 | 货架排已存在 | `prefix` |
+| `P3003` | 409 | 容量缩减或停用不安全 | `minAllowedCapacity` 或 `heldSlots` |
 | `P4004` | 404 | 资源不存在 | — |
 | `P5000` | 500 | 系统内部错误 | — |
 
