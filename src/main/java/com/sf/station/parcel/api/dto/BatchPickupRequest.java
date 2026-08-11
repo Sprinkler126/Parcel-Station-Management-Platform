@@ -1,6 +1,7 @@
 package com.sf.station.parcel.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
@@ -28,6 +29,12 @@ public class BatchPickupRequest {
     @Size(max = 32, message = "操作员长度不能超过 32")
     private String operator;
 
+    @Schema(description = "整批请求幂等标识；服务端按 requestId:parcelId 派生单件幂等键",
+            example = "batch-pickup-20260811-001")
+    @NotBlank(message = "requestId 不能为空")
+    @Size(max = 64, message = "requestId 长度不能超过 64")
+    private String requestId;
+
     public String getRealSuffix() {
         return realSuffix;
     }
@@ -50,5 +57,13 @@ public class BatchPickupRequest {
 
     public void setOperator(String operator) {
         this.operator = operator;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
     }
 }

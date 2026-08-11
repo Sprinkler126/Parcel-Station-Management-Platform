@@ -96,9 +96,10 @@
     const button = event.currentTarget;
     setBusy(button, true, "正在交付…");
     try {
-      if (ids.length === 1) await api(`/parcels/${ids[0]}/pickup`, { method: "POST", body: JSON.stringify({ operator: name }) });
+      const requestId = crypto.randomUUID();
+      if (ids.length === 1) await api(`/parcels/${ids[0]}/pickup`, { method: "POST", body: JSON.stringify({ operator: name, requestId }) });
       else {
-        const batch = await api("/parcels/pickup-batch", { method: "POST", body: JSON.stringify({ ids, operator: name }) });
+        const batch = await api("/parcels/pickup-batch", { method: "POST", body: JSON.stringify({ ids, operator: name, requestId }) });
         if (batch.failed) toast(`${batch.succeeded} 件成功，${batch.failed} 件失败`, "error");
       }
       toast(`已完成 ${ids.length} 件交付`);

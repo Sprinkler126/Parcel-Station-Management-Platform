@@ -9,7 +9,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.sf.station.parcel.domain.EventType;
 import com.sf.station.support.BaseIntegrationTest;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.LongStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -235,7 +237,8 @@ class QueryApiTest extends BaseIntegrationTest {
 
         mockMvc.perform(post("/api/v1/parcels/pickup-batch")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"ids\":[" + a + "," + b + "," + c + "],\"operator\":\"站员B\"}"))
+                        .content("{\"ids\":[" + a + "," + b + "," + c
+                                + "],\"operator\":\"站员B\",\"requestId\":\"tc14\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(3))
                 .andExpect(jsonPath("$.data.succeeded").value(2))
@@ -265,7 +268,8 @@ class QueryApiTest extends BaseIntegrationTest {
 
         mockMvc.perform(post("/api/v1/parcels/pickup-batch")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"realSuffix\":\"5678\",\"operator\":\"站员B\"}"))
+                        .content("{\"realSuffix\":\"5678\",\"operator\":\"站员B\","
+                                + "\"requestId\":\"suffix-batch\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(3))
                 .andExpect(jsonPath("$.data.succeeded").value(3))
@@ -273,11 +277,51 @@ class QueryApiTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("F9 整批重试：每件按 requestId:parcelId 独立命中且不重复写流水")
+    void batchPickupRetryIsIdempotentPerParcel() throws Exception {
+        long a = inbound("SF-IDEMPOTENT-A", "15-1");
+        long b = inbound("SF-IDEMPOTENT-B", "15-1");
+        String body = "{\"realSuffix\":\"5678\",\"operator\":\"站员B\","
+                + "\"requestId\":\"retry-batch\"}";
+
+        for (int attempt = 0; attempt < 2; attempt++) {
+            mockMvc.perform(post("/api/v1/parcels/pickup-batch")
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.succeeded").value(2))
+                    .andExpect(jsonPath("$.data.failed").value(0));
+        }
+
+        for (long id : List.of(a, b)) {
+            long pickups = eventRepo.findByParcelIdOrderByOccurredAtAscIdAsc(id).stream()
+                    .filter(event -> event.getEventType() == EventType.PICKUP)
+                    .count();
+            assertThat(pickups).isEqualTo(1);
+        }
+    }
+
+    @Test
+    @DisplayName("F9 单次最多接收 200 个包裹 ID")
+    void batchPickupRejectsMoreThanTwoHundredIds() throws Exception {
+        Map<String, Object> body = Map.of(
+                "ids", LongStream.rangeClosed(1, 201).boxed().toList(),
+                "operator", "站员B",
+                "requestId", "too-many");
+
+        mockMvc.perform(post("/api/v1/parcels/pickup-batch")
+                        .contentType(MediaType.APPLICATION_JSON).content(json(body)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("P1001"))
+                .andExpect(jsonPath("$.data.ids").value("单次批量取件不超过 200 件"));
+    }
+
+    @Test
     @DisplayName("F9 尾号下无待取件：404，提示可能是隐私单")
     void batchPickupNoPending() throws Exception {
         mockMvc.perform(post("/api/v1/parcels/pickup-batch")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"realSuffix\":\"9999\",\"operator\":\"站员B\"}"))
+                        .content("{\"realSuffix\":\"9999\",\"operator\":\"站员B\","
+                                + "\"requestId\":\"empty-batch\"}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("P4004"))
                 .andExpect(jsonPath("$.message").value(

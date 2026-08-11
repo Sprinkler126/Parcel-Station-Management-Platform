@@ -70,11 +70,16 @@ public class PickupTxService {
      * 静默成功会掩盖取件事故。
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Parcel pickup(Long id, String operator) {
+    public Parcel pickup(Long id, String operator, String requestId) {
         LocalDateTime now = LocalDateTime.now(clock);
-        int n = parcelRepo.markPickedUp(id, now, operator);
+        int n = parcelRepo.markPickedUp(id, now, operator, requestId);
         if (n == 0) {
-            throw notPending(id, "确认取件");
+            Parcel current = require(id);
+            if (requestId != null && requestId.equals(current.getPickupRequestId())
+                    && current.getStatus() == ParcelStatus.PICKED_UP) {
+                return current;
+            }
+            throw notPending(current, "确认取件");
         }
         events.record(id, EventType.PICKUP, ParcelStatus.PENDING, ParcelStatus.PICKED_UP,
                 operator, "确认取件，码进入冷却期", now);
@@ -214,7 +219,11 @@ public class PickupTxService {
      * update 的受影响行数，此处的查询只用于生成对站员有用的提示信息。
      */
     private BizException notPending(Long id, String action) {
-        Parcel p = require(id);
+        return notPending(require(id), action);
+    }
+
+    /** CAS 未命中后的状态分类只使用回查得到的最新实体，避免重复查询或误用旧实体。 */
+    private BizException notPending(Parcel p, String action) {
         if (p.getStatus() == ParcelStatus.PICKED_UP) {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("outboundAt", p.getOutboundAt());

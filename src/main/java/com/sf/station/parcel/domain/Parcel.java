@@ -111,6 +111,10 @@ public class Parcel {
     @Column(name = "outbound_at")
     private LocalDateTime outboundAt;
 
+    /** 成功取件请求的幂等键；批量取件按 requestId:parcelId 派生。 */
+    @Column(name = "pickup_request_id", length = 96)
+    private String pickupRequestId;
+
     @Column(name = "urge_count")
     private Integer urgeCount;
 
@@ -268,6 +272,10 @@ public class Parcel {
 
     public LocalDateTime getOutboundAt() {
         return outboundAt;
+    }
+
+    public String getPickupRequestId() {
+        return pickupRequestId;
     }
 
     public Integer getUrgeCount() {

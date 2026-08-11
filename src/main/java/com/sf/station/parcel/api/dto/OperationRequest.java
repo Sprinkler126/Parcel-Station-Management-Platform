@@ -19,6 +19,10 @@ public class OperationRequest {
     @Size(max = 64, message = "代取人信息长度不能超过 64")
     private String agent;
 
+    @Schema(description = "请求幂等标识；取件时与包裹 ID 组合使用", example = "pickup-20260811-001")
+    @Size(max = 64, message = "requestId 长度不能超过 64")
+    private String requestId;
+
     public String getOperator() {
         return operator;
     }
@@ -41,5 +45,13 @@ public class OperationRequest {
 
     public void setAgent(String agent) {
         this.agent = agent;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
     }
 }

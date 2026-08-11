@@ -141,7 +141,7 @@ public class ParcelController {
                     + "重复取件返回 P2005 而非静默成功")
     public ApiResponse<PickupReceiptVO> pickup(@PathVariable Long id,
                                                @Valid @RequestBody(required = false) OperationRequest req) {
-        return ApiResponse.ok(pickupService.pickup(id, operator(req)));
+        return ApiResponse.ok(pickupService.pickup(id, operator(req), req == null ? null : req.getRequestId()));
     }
 
     @PostMapping("/pickup-batch")
@@ -150,8 +150,8 @@ public class ParcelController {
                     + "按联系号聚合会把同一客户的多件拆散。部分成功语义")
     public ApiResponse<BatchResult<ParcelVO>> pickupBatch(@Valid @RequestBody BatchPickupRequest req) {
         BatchResult<ParcelVO> r = req.getIds() != null && !req.getIds().isEmpty()
-                ? pickupService.pickupBatch(req.getIds(), req.getOperator())
-                : pickupService.pickupBySuffix(req.getRealSuffix(), req.getOperator());
+                ? pickupService.pickupBatch(req.getIds(), req.getOperator(), req.getRequestId())
+                : pickupService.pickupBySuffix(req.getRealSuffix(), req.getOperator(), req.getRequestId());
         return ApiResponse.ok(r);
     }
 

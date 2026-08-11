@@ -111,10 +111,12 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long>,
     @Query("""
             update Parcel p set p.status = com.sf.station.parcel.domain.ParcelStatus.PICKED_UP,
                                 p.activeFlag = null, p.outboundAt = :now,
-                                p.operator = :op, p.updatedAt = :now
+                                p.operator = :op, p.updatedAt = :now,
+                                p.pickupRequestId = :requestId
             where p.id = :id and p.status = com.sf.station.parcel.domain.ParcelStatus.PENDING
             """)
-    int markPickedUp(@Param("id") Long id, @Param("now") LocalDateTime now, @Param("op") String op);
+    int markPickedUp(@Param("id") Long id, @Param("now") LocalDateTime now,
+                     @Param("op") String op, @Param("requestId") String requestId);
 
     /** 拒收退回。码槽位处理与取件一致：同样进入冷却，因为客户手里的旧通知同样存在。 */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -138,7 +140,8 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long>,
     @Query("""
             update Parcel p set p.status = com.sf.station.parcel.domain.ParcelStatus.PENDING,
                                 p.activeFlag = 1, p.codeSlotFlag = 1, p.outboundAt = null,
-                                p.operator = :op, p.updatedAt = :now
+                                p.operator = :op, p.updatedAt = :now,
+                                p.pickupRequestId = null
             where p.id = :id and p.status = com.sf.station.parcel.domain.ParcelStatus.PICKED_UP
             """)
     int markCancelPickup(@Param("id") Long id, @Param("now") LocalDateTime now, @Param("op") String op);
@@ -190,6 +193,15 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long>,
             order by p.inboundAt asc
             """)
     List<Parcel> findPendingBySuffix(@Param("suffix") String suffix);
+
+    /** 同一批请求已经成功取走的条目，用于整批重试时恢复每件的幂等结果。 */
+    @Query("""
+            select p from Parcel p
+            where p.realSuffix = :suffix and p.pickupRequestId like concat(:requestPrefix, '%')
+            order by p.inboundAt asc
+            """)
+    List<Parcel> findPickedBySuffixAndRequest(@Param("suffix") String suffix,
+                                               @Param("requestPrefix") String requestPrefix);
 
     @Query("""
             select p from Parcel p

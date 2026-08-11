@@ -51,6 +51,8 @@ class PickupApiTest extends BaseIntegrationTest {
         assertThat(p.getOperator()).isEqualTo("站员B");
 
         assertThat(eventTypes(id)).containsExactly(EventType.INBOUND, EventType.PICKUP);
+        assertThat(eventRepo.findByParcelIdOrderByOccurredAtAscIdAsc(id).get(1).getOccurredAt())
+                .isEqualTo(p.getOutboundAt());
     }
 
     @Test
@@ -74,6 +76,25 @@ class PickupApiTest extends BaseIntegrationTest {
         // 第二次尝试不得产生任何副作用
         assertThat(eventTypes(id)).containsExactly(EventType.INBOUND, EventType.PICKUP);
         assertThat(reload(id).getOutboundAt()).isEqualTo(now().minusHours(2));
+    }
+
+    @Test
+    @DisplayName("CAS 未命中且包裹已退回：409 / P2007，返回当前状态")
+    void pickupReturnedParcelReportsIllegalStatus() throws Exception {
+        long id = inbound("SF-PICK-RETURNED", "15-1");
+        mockMvc.perform(post("/api/v1/parcels/{id}/return", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"operator\":\"站员B\",\"remark\":\"客户拒收\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/parcels/{id}/pickup", id)
+                        .contentType(MediaType.APPLICATION_JSON).content(OP))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("P2007"))
+                .andExpect(jsonPath("$.data.currentStatus").value("RETURNED"))
+                .andExpect(jsonPath("$.data.expected").value("PENDING"));
+
+        assertThat(eventTypes(id)).containsExactly(EventType.INBOUND, EventType.RETURN);
     }
 
     // =========================================================================

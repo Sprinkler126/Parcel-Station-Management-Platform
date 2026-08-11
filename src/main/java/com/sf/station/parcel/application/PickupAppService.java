@@ -9,6 +9,7 @@ import com.sf.station.parcel.domain.Parcel;
 import com.sf.station.parcel.domain.ParcelStatus;
 import com.sf.station.parcel.repository.ParcelRepository;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,7 @@ import org.springframework.stereotype.Service;
 public class PickupAppService {
 
     private static final Logger log = LoggerFactory.getLogger(PickupAppService.class);
+    private static final int MAX_BATCH_SIZE = 200;
 
     private final PickupTxService tx;
     private final ParcelRepository parcelRepo;
@@ -52,7 +54,11 @@ public class PickupAppService {
     // =========================================================================
 
     public PickupReceiptVO pickup(Long id, String operator) {
-        Parcel p = tx.pickup(id, operator);
+        return pickup(id, operator, null);
+    }
+
+    public PickupReceiptVO pickup(Long id, String operator, String requestId) {
+        Parcel p = tx.pickup(id, operator, idempotencyKey(requestId, id));
         return new PickupReceiptVO(assembler.toVO(p), p.getOutboundAt(), tx.reusableAt(p));
     }
 
@@ -99,17 +105,22 @@ public class PickupAppService {
      * AXB 虚拟号一单一号，按联系号聚合会把同一客户的三个包裹拆成三组，
      * 批量取件功能直接失效——这是隐私面单带来的最隐蔽的一处影响。
      */
-    public BatchResult<ParcelVO> pickupBySuffix(String rawSuffix, String operator) {
+    public BatchResult<ParcelVO> pickupBySuffix(String rawSuffix, String operator, String requestId) {
         String suffix = contactResolver.normalizeSuffix(rawSuffix);
         if (suffix == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "真实后四位应为 4 位数字");
         }
-        List<Long> ids = parcelRepo.findPendingBySuffix(suffix).stream().map(Parcel::getId).toList();
+        LinkedHashSet<Long> ids = new LinkedHashSet<>();
+        parcelRepo.findPendingBySuffix(suffix).stream().map(Parcel::getId).forEach(ids::add);
+        if (requestId != null && !requestId.isBlank()) {
+            parcelRepo.findPickedBySuffixAndRequest(suffix, requestId.trim() + ":").stream()
+                    .map(Parcel::getId).forEach(ids::add);
+        }
         if (ids.isEmpty()) {
             throw new BizException(ErrorCode.NOT_FOUND,
                     "尾号 " + suffix + " 下没有待取件包裹，可能是隐私单，请尝试取件码或运单号");
         }
-        return pickupBatch(ids, operator);
+        return pickupBatch(List.copyOf(ids), operator, requestId);
     }
 
     /**
@@ -118,12 +129,15 @@ public class PickupAppService {
      * <p>逐条调用 {@code REQUIRES_NEW} 的事务方法：单条失败只回滚它自己那一层，
      * 已成功的不受影响。这正是"其中一件已被家人取走"（TC-14）时的期望行为。
      */
-    public BatchResult<ParcelVO> pickupBatch(List<Long> ids, String operator) {
+    public BatchResult<ParcelVO> pickupBatch(List<Long> ids, String operator, String requestId) {
+        if (ids.size() > MAX_BATCH_SIZE) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "单次批量取件不超过 200 件");
+        }
         List<ParcelVO> ok = new ArrayList<>();
         List<BatchResult.Failure> failures = new ArrayList<>();
         for (Long id : ids) {
             try {
-                ok.add(assembler.toVO(tx.pickup(id, operator)));
+                ok.add(pickup(id, operator, requestId).parcel());
             } catch (BizException e) {
                 failures.add(new BatchResult.Failure(id, e.getErrorCode().code(), e.getMessage()));
             } catch (RuntimeException e) {
@@ -133,6 +147,13 @@ public class PickupAppService {
             }
         }
         return BatchResult.of(ok, failures);
+    }
+
+    private static String idempotencyKey(String requestId, Long parcelId) {
+        if (requestId == null || requestId.isBlank()) {
+            return null;
+        }
+        return requestId.trim() + ":" + parcelId;
     }
 
     // =========================================================================

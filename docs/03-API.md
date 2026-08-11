@@ -109,10 +109,11 @@
 `POST /parcels/{id}/pickup`
 
 ```json
-{ "operator": "站员A", "agent": "代取人李某" }
+{ "operator": "站员A", "agent": "代取人李某", "requestId": "pickup-20260811-001" }
 ```
 
-请求体可省略。成功返回出库时间与预计回炉日期；重复取件返回 `P2005`。
+请求体可省略。传入 `requestId` 时，服务端使用 `requestId:parcelId` 作为幂等键；
+同一请求重试返回原取件结果，不重复写流水。使用不同 `requestId` 重复取件仍返回 `P2005`。
 
 ### 2.6 批量取件
 
@@ -121,16 +122,18 @@
 按真实尾号聚合：
 
 ```json
-{ "realSuffix": "5678", "operator": "站员A" }
+{ "realSuffix": "5678", "operator": "站员A", "requestId": "batch-20260811-001" }
 ```
 
 或按前端勾选的 ID：
 
 ```json
-{ "ids": [101, 102], "operator": "站员A" }
+{ "ids": [101, 102], "operator": "站员A", "requestId": "batch-20260811-001" }
 ```
 
-两者同时存在时 `ids` 优先。单次最多 200 个 ID，返回部分成功结果。
+`requestId` 必填。两种方式同时存在时 `ids` 优先；单次最多 200 个 ID。
+服务端逐件调用单件取件，以 `requestId:parcelId` 派生各自的幂等键，并完全依赖状态 CAS 判定成败；
+查询后已被其他请求取走的条目进入 `failures`，不影响其余条目成功。
 
 ### 2.7 状态操作
 
