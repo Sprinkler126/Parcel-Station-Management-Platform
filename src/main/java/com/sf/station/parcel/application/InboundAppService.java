@@ -1,6 +1,7 @@
 package com.sf.station.parcel.application;
 
 import com.sf.station.code.application.CodeAllocationService;
+import com.sf.station.code.application.CooldownPolicyApplier;
 import com.sf.station.code.application.CooldownQueryService;
 import com.sf.station.code.domain.CodeSpace;
 import com.sf.station.code.domain.PickupCodeNormalizer;
@@ -44,16 +45,19 @@ public class InboundAppService {
     private final ParcelRepository parcelRepo;
     private final CodeAllocationService allocation;
     private final CooldownQueryService cooldownQuery;
+    private final CooldownPolicyApplier policyApplier;
     private final AppProperties props;
     private final Clock clock;
 
     public InboundAppService(InboundTxService txService, ParcelRepository parcelRepo,
                              CodeAllocationService allocation, CooldownQueryService cooldownQuery,
+                             CooldownPolicyApplier policyApplier,
                              AppProperties props, Clock clock) {
         this.txService = txService;
         this.parcelRepo = parcelRepo;
         this.allocation = allocation;
         this.cooldownQuery = cooldownQuery;
+        this.policyApplier = policyApplier;
         this.props = props;
         this.clock = clock;
     }
@@ -62,7 +66,9 @@ public class InboundAppService {
         int maxRetry = Math.max(1, props.getInbound().getMaxRetry());
         for (int i = 0; i < maxRetry; i++) {
             try {
-                return txService.inbound(cmd, i);
+                Parcel p = txService.inbound(cmd, i);
+                reactToPressure(p.getCodePrefix());
+                return p;
             } catch (DataIntegrityViolationException e) {
                 String msg = rootMessage(e);
 
@@ -111,6 +117,30 @@ public class InboundAppService {
             }
         }
         return BatchResult.of(ok, failures);
+    }
+
+    // =========================================================================
+    // 事件触发的冷却重算（文档 §9.5）
+    // =========================================================================
+
+    /**
+     * 入库成功后检查该排是否已跌破 TIGHT 线，是则立即重算冷却策略。
+     *
+     * <p>为什么不只靠每日定时任务：冷却期是天级量纲，但"码不够用"是分钟级事故。
+     * 一个大件促销日下午能把一排从 40% 可用率打到 5%，等到次日 3:10 才收紧冷却期，
+     * 意味着站员要面对整整一个下午加一个晚上的"没号可用"。
+     *
+     * <p><b>刻意放在事务外并吞掉所有异常</b>：策略重算是旁路优化，
+     * 它失败绝不能让一次已经成功落库的入库回滚——包裹已经在架上了，
+     * 因为一次指标聚合超时就告诉站员"入库失败"，是本末倒置。
+     */
+    private void reactToPressure(String prefix) {
+        try {
+            allocation.findSpace(prefix).ifPresent(space ->
+                    policyApplier.applyIfTight(space, LocalDateTime.now(clock)));
+        } catch (RuntimeException e) {
+            log.warn("cooldown recompute skipped for {}: {}", prefix, e.toString());
+        }
     }
 
     // =========================================================================
