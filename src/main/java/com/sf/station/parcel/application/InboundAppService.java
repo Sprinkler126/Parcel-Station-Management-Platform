@@ -13,7 +13,9 @@ import com.sf.station.parcel.domain.Parcel;
 import com.sf.station.parcel.repository.ParcelRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -84,6 +86,31 @@ public class InboundAppService {
             }
         }
         throw new BizException(ErrorCode.CODE_SPACE_BUSY, "货位繁忙，请重试");
+    }
+
+    /**
+     * 批量入库，部分成功语义（文档 §10）。
+     *
+     * <p>逐条走完整的"事务内分配 + 事务外重试"链路，不做任何合并优化。
+     * 合并成一个大事务看起来更快，但一条运单号冲突就会让整批回滚，
+     * 而卸货场景下重复扫描是常态，整批回滚等于让站员重扫五十件。
+     */
+    public BatchResult<Parcel> inboundBatch(List<InboundCommand> cmds) {
+        List<Parcel> ok = new ArrayList<>();
+        List<BatchResult.Failure> failures = new ArrayList<>();
+        for (InboundCommand cmd : cmds) {
+            try {
+                ok.add(inbound(cmd));
+            } catch (BizException e) {
+                failures.add(new BatchResult.Failure(cmd.trackingNo(),
+                        e.getErrorCode().code(), e.getMessage()));
+            } catch (RuntimeException e) {
+                log.error("batch inbound failed for {}", cmd.trackingNo(), e);
+                failures.add(new BatchResult.Failure(cmd.trackingNo(),
+                        ErrorCode.INTERNAL.code(), ErrorCode.INTERNAL.defaultMessage()));
+            }
+        }
+        return BatchResult.of(ok, failures);
     }
 
     // =========================================================================

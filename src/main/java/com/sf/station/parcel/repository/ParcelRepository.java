@@ -8,11 +8,21 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface ParcelRepository extends JpaRepository<Parcel, Long> {
+/**
+ * 包裹仓储。
+ *
+ * <p>继承 {@link JpaSpecificationExecutor} 承载分层检索：检索通道、状态、滞留档位、
+ * 排前缀是四个正交的可选条件，若用 {@code @Query} 拼 {@code :x is null or ...}，
+ * 枚举类型的 null 参数在 Hibernate 里需要显式 cast，可读性与稳定性都差；
+ * Criteria 动态拼装则天然只拼出现的条件，生成的 SQL 也更干净。
+ */
+public interface ParcelRepository extends JpaRepository<Parcel, Long>,
+        JpaSpecificationExecutor<Parcel> {
 
     // =========================================================================
     // 分配路径：位图加载
@@ -150,6 +160,11 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long> {
             where p.id = :id
             """)
     int patchSuffix(@Param("id") Long id, @Param("suffix") String suffix, @Param("now") LocalDateTime now);
+
+    /** 异常件备注。备注不改变状态，故无状态前置条件 */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Parcel p set p.remark = :remark, p.updatedAt = :now where p.id = :id")
+    int patchRemark(@Param("id") Long id, @Param("remark") String remark, @Param("now") LocalDateTime now);
 
     // =========================================================================
     // 检索

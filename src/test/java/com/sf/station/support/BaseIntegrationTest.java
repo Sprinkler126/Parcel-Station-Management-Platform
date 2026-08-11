@@ -1,19 +1,31 @@
 package com.sf.station.support;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sf.station.code.domain.CodeSpace;
 import com.sf.station.code.repository.CodeSpaceRepository;
 import com.sf.station.code.repository.CooldownPolicyLogRepository;
+import com.sf.station.parcel.domain.EventType;
+import com.sf.station.parcel.domain.Parcel;
+import com.sf.station.parcel.domain.ParcelEvent;
 import com.sf.station.parcel.repository.ParcelEventRepository;
 import com.sf.station.parcel.repository.ParcelRepository;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 /**
  * 集成测试基类：MockMvc + H2 + MutableClock。
@@ -71,5 +83,51 @@ public abstract class BaseIntegrationTest {
 
     protected String json(Object o) throws Exception {
         return objectMapper.writeValueAsString(o);
+    }
+
+    // =========================================================================
+    // 请求辅助
+    // =========================================================================
+
+    /** 标准入库请求体，用例按需覆盖单个字段 */
+    protected Map<String, Object> inboundBody(String trackingNo, String prefix) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("trackingNo", trackingNo);
+        m.put("courier", "SF");
+        m.put("contactNo", "13812345678");
+        m.put("receiverName", "张");
+        m.put("codeMode", "AUTO");
+        m.put("scope", "ROW");
+        m.put("codePrefix", prefix);
+        m.put("operator", "站员A");
+        return m;
+    }
+
+    /** 走 HTTP 入库一件并返回其 id，供出库类用例铺数据 */
+    protected long inbound(Map<String, Object> body) throws Exception {
+        String resp = mockMvc.perform(post("/api/v1/parcels")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(body)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(resp).path("data").path("id").asLong();
+    }
+
+    protected long inbound(String trackingNo, String prefix) throws Exception {
+        return inbound(inboundBody(trackingNo, prefix));
+    }
+
+    /** 读取响应体中的某个 JSON 路径节点 */
+    protected JsonNode node(MvcResult result) throws Exception {
+        return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    protected Parcel reload(long id) {
+        return parcelRepo.findById(id).orElseThrow();
+    }
+
+    protected List<EventType> eventTypes(long id) {
+        return eventRepo.findByParcelIdOrderByOccurredAtAscIdAsc(id).stream()
+                .map(ParcelEvent::getEventType).toList();
     }
 }

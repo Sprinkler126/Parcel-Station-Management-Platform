@@ -58,6 +58,11 @@ public class CodeAllocationService {
         };
     }
 
+    /** 按前缀查排，不要求启用。用于展示类场景（如回炉日期换算），排停用了历史数据仍要能读 */
+    public Optional<CodeSpace> findSpace(String prefix) {
+        return prefix == null ? Optional.empty() : spaceRepo.findById(prefix);
+    }
+
     public CodeSpace requireEnabled(String prefix) {
         if (prefix == null || prefix.isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "codePrefix 不能为空");

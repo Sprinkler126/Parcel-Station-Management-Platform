@@ -9,7 +9,6 @@ import com.sf.station.parcel.domain.EventType;
 import com.sf.station.parcel.domain.Parcel;
 import com.sf.station.parcel.domain.ParcelStatus;
 import com.sf.station.support.BaseIntegrationTest;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -19,19 +18,6 @@ import org.springframework.http.MediaType;
 
 /** 入库主链路的 MockMvc 用例。 */
 class InboundApiTest extends BaseIntegrationTest {
-
-    private Map<String, Object> inboundBody(String trackingNo, String prefix) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("trackingNo", trackingNo);
-        m.put("courier", "SF");
-        m.put("contactNo", "13812345678");
-        m.put("receiverName", "张");
-        m.put("codeMode", "AUTO");
-        m.put("scope", "ROW");
-        m.put("codePrefix", prefix);
-        m.put("operator", "站员A");
-        return m;
-    }
 
     @Test
     @Tag("showcase")
