@@ -38,7 +38,10 @@ spring:
 
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    # db/seed 只在主 profile 生效；application-test.yml 里只列 db/migration，
+    # 演示数据因此进不了测试库——集成测试大量断言精确计数（total=2、available=99），
+    # 混入种子数据会让这些断言整体偏移，且报错信息毫无指向性。
+    locations: classpath:db/migration,classpath:db/seed
     baseline-on-migrate: true
 
 app:
