@@ -1,5 +1,6 @@
 target/
 data/
+.tools/
 !.mvn/wrapper/maven-wrapper.jar
 .mvn_env.sh
 

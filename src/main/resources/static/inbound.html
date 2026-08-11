@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>连续入库 · 驿站工作台</title><link rel="stylesheet" href="/css/app.css"></head>
+<body>
+<header class="topbar"><a class="brand" href="/"><span class="brand-mark">驿</span><span>末端驿站工作台</span></a><nav class="nav"><a href="/">产品介绍</a><a class="active" href="/inbound.html">入库</a><a href="/pickup.html">取件</a><a href="/query.html">查询</a><a href="/dashboard.html">看板</a></nav></header>
+<main class="shell">
+  <div class="page-head"><div><div class="eyebrow">Continuous inbound</div><h1>连续入库</h1><p>提交成功后自动清空运单与联系号，并把焦点送回运单输入框。</p></div><div class="muted small">快捷键：Ctrl / ⌘ + Enter 提交</div></div>
+  <div class="grid grid-2">
+    <section class="card">
+      <div class="section-title"><div><h2>入库信息</h2><button id="demoInbound" class="text-button" type="button">一键模拟填充</button></div><div class="mode-switch"><button id="autoMode" class="active" type="button">系统分配</button><button id="manualMode" type="button">手动完整码</button></div></div>
+      <form id="inboundForm">
+        <div class="form-grid">
+          <div class="field full"><label for="trackingNo">运单号 *</label><input id="trackingNo" name="trackingNo" maxlength="32" autocomplete="off" autofocus required placeholder="扫描或输入运单号"></div>
+          <div class="field"><label for="courier">快递公司 *</label><input id="courier" name="courier" value="SF" maxlength="16" required></div>
+          <div class="field"><label for="contactNo">面单联系号 *</label><input id="contactNo" name="contactNo" maxlength="24" required placeholder="138****5678"></div>
+          <div class="field"><label for="receiverName">收件人</label><input id="receiverName" name="receiverName" maxlength="32" placeholder="姓氏或姓名"></div>
+          <div class="field"><label for="operator">操作员</label><input id="operator" name="operator" maxlength="32" placeholder="站员A"></div>
+          <div id="scopeField" class="field"><label for="scope">取码范围</label><select id="scope" name="scope"><option value="ROW">指定排：固定 15-1</option><option value="SHELF">指定货架：固定 15</option><option value="FULL">全站：不指定前缀</option></select><span id="scopeHelp" class="field-help">固定前两段，系统只推荐最后的序号。</span></div>
+          <div id="prefixField" class="field"><label id="prefixLabel" for="codePrefix">指定排前缀 *</label><input id="codePrefix" name="codePrefix" value="15-1" placeholder="例如 15-1" required><span id="prefixHelp" class="field-help">结果形如 15-1-随机可用序号</span></div>
+          <div id="manualField" class="field full is-hidden"><label for="pickupCode">手动完整取件码 *</label><input id="pickupCode" name="pickupCode" placeholder="例如 15-1-731" disabled><span class="field-help">系统将按你输入的完整码入库；若已占用或仍在冷却，会明确提示冲突。</span></div>
+          <div class="field full"><label for="remark">备注</label><textarea id="remark" name="remark" maxlength="255" placeholder="异常件说明（可选）"></textarea></div>
+        </div>
+        <div id="preview" class="preview"><span><span id="previewLabel" class="muted small">指定排预览（前两段固定，不占位）</span><br><strong id="nextCode">加载中…</strong></span><button class="btn btn-sm" id="refreshPreview" type="button">刷新</button></div>
+        <div id="manualSummary" class="manual-summary is-hidden"><span class="muted small">本次将使用手动完整码</span><strong id="manualCodeEcho">等待输入</strong><span class="field-help">手动模式不会调用下方自动推荐。</span></div>
+        <div class="actions"><button id="submitButton" class="btn btn-primary" type="submit">确认入库</button><button id="resetButton" class="btn" type="reset">清空本件</button></div>
+      </form>
+    </section>
+    <aside class="card">
+      <div class="section-title"><h2>本次结果</h2><span class="muted small" id="sessionCount">本班次 0 件</span></div>
+      <div id="emptyResult" class="empty">等待第一件包裹入库</div>
+      <div id="result" class="result-card"><div class="muted small">系统确认取件码</div><div id="resultCode" class="code-big"></div><p id="resultMeta" class="muted"></p><div class="actions"><button id="undoButton" class="btn btn-danger" type="button">撤销上一件入库</button></div></div>
+    </aside>
+  </div>
+</main>
+<script src="/js/app.js"></script><script src="/js/inbound.js"></script>
+</body></html>

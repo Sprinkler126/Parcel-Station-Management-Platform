@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="面向末端驿站的包裹入库、取件、查询与取件码生命周期管理平台">
+  <title>末端驿站包裹管理平台</title><link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/"><span class="brand-mark">驿</span><span>末端驿站工作台</span></a>
+  <nav class="nav"><a class="active" href="/">产品介绍</a><a href="/inbound.html">入库</a><a href="/pickup.html">取件</a><a href="/query.html">查询</a><a href="/dashboard.html">看板</a></nav>
+</header>
+<main>
+  <section class="landing-hero">
+    <div class="landing-copy">
+      <div class="live-pill"><span id="liveDot" class="live-dot"></span><span id="liveText">正在连接站点服务</span></div>
+      <div class="eyebrow">Parcel Station Management Platform</div>
+      <h1>把复杂的码生命周期，<br>藏进顺手的驿站工作流。</h1>
+      <p class="subtitle">覆盖连续入库、按码取件、尾号聚合、滞留处理和今日经营看板。系统专门处理隐私面单、取件码循环复用和并发入库这些真正棘手的现场问题。</p>
+      <div class="actions"><a class="btn btn-primary btn-lg" href="/inbound.html">开始入库</a><a class="btn btn-lg" href="/pickup.html">进入取件台</a></div>
+    </div>
+    <div class="ops-panel">
+      <div class="ops-head"><span>站点实时快照</span><span id="snapshotTime" class="muted small">连接中</span></div>
+      <div class="ops-code"><span class="muted small">下一可用取件码</span><strong id="heroNextCode">—</strong></div>
+      <div class="mini-stats"><div><span>今日入库</span><strong id="heroInbound">—</strong></div><div><span>当前在库</span><strong id="heroStock">—</strong></div><div><span>滞留件</span><strong id="heroOverdue">—</strong></div></div>
+      <div class="route-line"><span class="route-node active">扫码</span><i></i><span class="route-node active">分码</span><i></i><span class="route-node">上架</span><i></i><span class="route-node">交付</span></div>
+    </div>
+  </section>
+
+  <section class="landing-section">
+    <div class="section-kicker">CORE WORKFLOWS</div><div class="landing-title"><h2>四条工作流，一套一致的数据事实</h2><p>每个页面都连接真实后端，演示填充只帮你准备输入，不会绕过业务规则。</p></div>
+    <div class="grid grid-4">
+      <a class="card feature compact" href="/inbound.html"><span class="feature-index">01 · 收</span><h3>连续入库</h3><p>自动预览下一码，支持真实号、掩码号与 AXB 虚拟号。</p><span class="arrow">进入入库台 →</span></a>
+      <a class="card feature compact" href="/pickup.html"><span class="feature-index">02 · 取</span><h3>快速取件</h3><p>输入取件码精准交付，或按真实尾号聚合同一客户的多件包裹。</p><span class="arrow">进入取件台 →</span></a>
+      <a class="card feature compact" href="/query.html"><span class="feature-index">03 · 查</span><h3>分层查询</h3><p>一个输入框识别取件码、尾号、运单号和完整联系号。</p><span class="arrow">查询包裹 →</span></a>
+      <a class="card feature compact" href="/dashboard.html"><span class="feature-index">04 · 看</span><h3>运营看板</h3><p>实时查看进出、滞留、快递分布和各排码空间压力。</p><span class="arrow">查看看板 →</span></a>
+    </div>
+  </section>
+
+  <section class="landing-section split-section">
+    <div><div class="section-kicker">LIFECYCLE DEMO</div><div class="landing-title"><h2>一个取件码，如何安全循环使用？</h2><p>点击阶段，查看系统在每一步保持的事实与约束。</p></div>
+      <div id="lifecycle" class="lifecycle-tabs"><button class="active" data-stage="inbound">1 入库</button><button data-stage="pending">2 在库</button><button data-stage="pickup">3 取件</button><button data-stage="cooling">4 冷却</button><button data-stage="reusable">5 回炉</button></div>
+    </div>
+    <div class="card lifecycle-card"><div id="stageLabel" class="feature-index">INBOUND · 入库</div><h3 id="stageTitle">两条生命周期同时开始</h3><p id="stageText">运单活动标记与取件码槽位标记同时置为 1；数据库唯一索引负责并发下的最终裁决。</p><div class="fact-pair"><div><span>运单槽位</span><strong id="trackingFlag">占用</strong></div><div><span>取件码槽位</span><strong id="codeFlag">占用</strong></div></div></div>
+  </section>
+
+  <section class="design-band">
+    <div class="section-kicker">DESIGN PRINCIPLES</div><div class="landing-title"><h2>设计不是堆功能，而是守住不变量</h2><p>系统把高风险规则放在数据库、纯函数和原子状态更新中，而不是依赖页面操作顺序。</p></div>
+    <div class="principle-grid"><article><span>01</span><h3>双生命周期</h3><p>包裹已取走不等于取件码立刻可用。运单完结与码槽冷却分别管理。</p></article><article><span>02</span><h3>隐私面单双职责</h3><p>联系号码负责联系，真实后四位负责身份检索，虚拟号支持后续补录。</p></article><article><span>03</span><h3>时间实时派生</h3><p>滞留与冷却只根据原始时间事实计算，策略调整无需回刷历史数据。</p></article><article><span>04</span><h3>流水只追加</h3><p>入库、取件、撤销和催取都保留事件，任何状态变化都可追溯。</p></article></div>
+  </section>
+
+  <section class="landing-section architecture"><div><div class="section-kicker">ARCHITECTURE</div><div class="landing-title"><h2>简单部署，清晰分层</h2><p>浏览器零构建直接访问；Spring Boot 管理业务边界；MySQL 保存事实；Flyway 管理结构版本。</p></div></div><div class="architecture-flow"><span>HTML / CSS / JS</span><b>→</b><span>REST API</span><b>→</b><span>Domain Service</span><b>→</b><span>MySQL 8.4</span></div></section>
+
+  <section class="landing-cta"><div><div class="eyebrow">Ready for a real workflow?</div><h2>从一件模拟包裹开始。</h2><p>业务页面提供演示填充，提交仍会经过完整校验、事务与流水。</p></div><a class="btn btn-primary btn-lg" href="/inbound.html">打开连续入库</a></section>
+</main>
+<footer class="footer">末端驿站包裹管理平台 · Spring Boot / MySQL / Flyway</footer>
+<script src="/js/app.js"></script><script src="/js/home.js"></script>
+</body></html>
