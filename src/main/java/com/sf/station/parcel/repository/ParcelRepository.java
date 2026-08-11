@@ -38,6 +38,8 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long>,
      * <p>{@code outboundAt is null} 表示在库，一律占用；
      * {@code outboundAt > boundary} 表示冷却未满。
      * 边界取闭区间：outboundAt <= boundary 视为冷却完毕（与滞留的 >= 同向）。
+     * 索引 {@code idx_alloc(code_prefix, code_slot_flag, outbound_at, code_seq)}
+     * 依次承载等值定位、冷却边界过滤和 {@code codeSeq} 覆盖返回，查询无需回表取过滤列。
      */
     @Query("""
             select p.codeSeq from Parcel p
