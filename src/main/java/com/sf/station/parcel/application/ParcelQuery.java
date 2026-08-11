@@ -15,13 +15,22 @@ import com.sf.station.parcel.domain.ParcelStatus;
  * @param page        页码，从 0 开始
  * @param size        每页条数
  */
-public record ParcelQuery(String keyword, SearchChannel channel, ParcelStatus status,
-                          OverdueLevel overdue, String codePrefix, int page, int size) {
+public record ParcelQuery(String keyword, SearchChannel channel,
+                          String receiverName, String pickupCode, String realSuffix,
+                          String trackingNo, String contactNo,
+                          ParcelStatus status, OverdueLevel overdue, String codePrefix,
+                          int page, int size) {
 
     public ParcelQuery {
         page = Math.max(0, page);
         size = size <= 0 ? 20 : Math.min(size, 200);
         channel = channel == null ? SearchChannel.AUTO : channel;
+        receiverName = clean(receiverName);
+        pickupCode = clean(pickupCode);
+        realSuffix = clean(realSuffix);
+        trackingNo = clean(trackingNo);
+        contactNo = clean(contactNo);
+        codePrefix = clean(codePrefix);
     }
 
     public boolean hasKeyword() {
@@ -31,5 +40,9 @@ public record ParcelQuery(String keyword, SearchChannel channel, ParcelStatus st
     /** 实际生效的通道：AUTO 时按形态判断 */
     public SearchChannel effectiveChannel() {
         return channel == SearchChannel.AUTO ? SearchChannel.detect(keyword) : channel;
+    }
+
+    private static String clean(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

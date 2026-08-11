@@ -97,10 +97,14 @@ public class InboundTxService {
         // 那时约束冲突异常已在调用方的 catch 之外触发，无法捕获
         parcelRepo.saveAndFlush(p);
 
-        // 4. 游标前进。无需加锁：游标的正确性不影响系统正确性，只影响复用间隔的质量
-        space.setCursorPos(seq);
-        space.setUpdatedAt(now);
-        spaceRepo.save(space);
+        // 4. 只有 AUTO 分配才推进 next-fit 游标。
+        // MANUAL 可能指定任意高位码；若用它推进游标，会让后续自动入库从该高位继续，
+        // 破坏连续上架顺序。手动码的占用仍由 uk_code_slot 与位图正常识别、跳过。
+        if (mode == CodeSource.AUTO) {
+            space.setCursorPos(seq);
+            space.setUpdatedAt(now);
+            spaceRepo.save(space);
+        }
 
         // 5. 流水
         String detail = "取件码 " + code.fullCode() + "，来源 " + mode

@@ -191,6 +191,17 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long>,
             """)
     List<Parcel> findPendingBySuffix(@Param("suffix") String suffix);
 
+    @Query("""
+            select p from Parcel p
+            where p.receiverName = :receiverName and p.realSuffix = :suffix
+              and p.status = com.sf.station.parcel.domain.ParcelStatus.PENDING
+              and p.id <> :excludeId
+            order by p.inboundAt asc, p.id asc
+            """)
+    List<Parcel> findPendingCompanions(@Param("receiverName") String receiverName,
+                                       @Param("suffix") String suffix,
+                                       @Param("excludeId") Long excludeId);
+
     Page<Parcel> findByPickupCode(String pickupCode, Pageable pageable);
 
     Page<Parcel> findByPickupCodeAndStatus(String pickupCode, ParcelStatus status, Pageable pageable);

@@ -2,6 +2,8 @@
   const { api, toast, errorMessage, formatTime, escapeHtml, queryString, setBusy } = Station;
   const form = document.querySelector("#searchForm");
   const rows = document.querySelector("#rows");
+  const filterIds = ["keyword", "receiverName", "pickupCodeFilter", "realSuffix",
+    "trackingNo", "contactNo", "status", "overdue", "codePrefix"];
   let page = 0;
   let totalPages = 0;
 
@@ -26,7 +28,18 @@
     const button = document.querySelector("#searchButton");
     setBusy(button, true, "查询中…");
     try {
-      const data = await api(`/parcels${queryString({ keyword: document.querySelector("#keyword").value.trim(), status: document.querySelector("#status").value, overdue: document.querySelector("#overdue").value, codePrefix: document.querySelector("#codePrefix").value.trim(), page, size: 20 })}`);
+      const data = await api(`/parcels${queryString({
+        keyword: document.querySelector("#keyword").value.trim(),
+        receiverName: document.querySelector("#receiverName").value.trim(),
+        pickupCode: document.querySelector("#pickupCodeFilter").value.trim(),
+        realSuffix: document.querySelector("#realSuffix").value.trim(),
+        trackingNo: document.querySelector("#trackingNo").value.trim(),
+        contactNo: document.querySelector("#contactNo").value.trim(),
+        status: document.querySelector("#status").value,
+        overdue: document.querySelector("#overdue").value,
+        codePrefix: document.querySelector("#codePrefix").value.trim(),
+        page, size: 20
+      })}`);
       totalPages = data.totalPages;
       render(data.content);
       document.querySelector("#pageInfo").textContent = `第 ${data.page + 1} / ${Math.max(1, data.totalPages)} 页 · 共 ${data.total} 件`;
@@ -38,12 +51,13 @@
 
   form.addEventListener("submit", event => { event.preventDefault(); page = 0; search(); });
   document.querySelector(".quick-demos").addEventListener("click", event => {
-    const button = event.target.closest("button[data-demo]");
+    const button = event.target.closest("button[data-demo],button[data-name]");
     if (!button) return;
-    document.querySelector("#keyword").value = button.dataset.demo;
+    filterIds.forEach(id => { document.querySelector(`#${id}`).value = id === "status" ? "PENDING" : ""; });
+    document.querySelector("#keyword").value = button.dataset.demo || "";
+    document.querySelector("#receiverName").value = button.dataset.name || "";
     document.querySelector("#status").value = button.dataset.status ?? "PENDING";
     document.querySelector("#overdue").value = button.dataset.overdue ?? "";
-    document.querySelector("#codePrefix").value = "";
     page = 0;
     search();
   });

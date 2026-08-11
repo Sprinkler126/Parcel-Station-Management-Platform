@@ -66,6 +66,69 @@ class QueryApiTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("F2 姓名与尾号等条件可组合查询，所有已填条件按 AND 生效")
+    void searchByNameAndMultipleConditions() throws Exception {
+        Map<String, Object> target = inboundBody("SF-MULTI-001", "15-1");
+        target.put("receiverName", "张小明");
+        target.put("contactNo", "13812345678");
+        long targetId = inbound(target);
+
+        Map<String, Object> sameName = inboundBody("SF-MULTI-002", "15-1");
+        sameName.put("receiverName", "张小明");
+        sameName.put("contactNo", "13900001111");
+        inbound(sameName);
+
+        Map<String, Object> sameSuffix = inboundBody("SF-MULTI-003", "15-1");
+        sameSuffix.put("receiverName", "李小明");
+        sameSuffix.put("contactNo", "18800005678");
+        inbound(sameSuffix);
+
+        mockMvc.perform(get("/api/v1/parcels")
+                        .param("receiverName", "小明")
+                        .param("realSuffix", "5678")
+                        .param("trackingNo", "SF-MULTI-001")
+                        .param("status", "PENDING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(targetId));
+    }
+
+    @Test
+    @DisplayName("F3 取件码命中后只追加同姓名且同真实尾号的其他在库包裹")
+    void pickupCompanionsRequireSameNameAndSuffix() throws Exception {
+        Map<String, Object> source = inboundBody("SF-COMPANION-001", "15-1");
+        source.put("receiverName", "王芳");
+        source.put("contactNo", "13812345678");
+        long sourceId = inbound(source);
+
+        Map<String, Object> companion = inboundBody("SF-COMPANION-002", "15-1");
+        companion.put("receiverName", "王芳");
+        companion.put("contactNo", "18800005678");
+        long companionId = inbound(companion);
+
+        Map<String, Object> differentName = inboundBody("SF-COMPANION-003", "15-1");
+        differentName.put("receiverName", "王强");
+        differentName.put("contactNo", "18800005678");
+        inbound(differentName);
+
+        Map<String, Object> differentSuffix = inboundBody("SF-COMPANION-004", "15-1");
+        differentSuffix.put("receiverName", "王芳");
+        differentSuffix.put("contactNo", "18800001111");
+        inbound(differentSuffix);
+
+        mockMvc.perform(get("/api/v1/parcels/{id}/pickup-companions", sourceId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(companionId));
+
+        mockMvc.perform(post("/api/v1/parcels/{id}/pickup", companionId)
+                        .contentType(MediaType.APPLICATION_JSON).content(OP))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/parcels/{id}/pickup-companions", sourceId))
+                .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
     @DisplayName("F2 查无结果返回空列表（200）而非报错")
     void searchNoResultReturnsEmptyList() throws Exception {
         inbound("SF-Q-100", "15-1");

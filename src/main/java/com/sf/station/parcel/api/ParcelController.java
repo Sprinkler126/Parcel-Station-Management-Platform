@@ -91,14 +91,32 @@ public class ParcelController {
             @Parameter(description = "查询串") @RequestParam(required = false) String keyword,
             @Parameter(description = "强制指定检索通道，默认 AUTO")
             @RequestParam(required = false) SearchChannel channel,
+            @Parameter(description = "收件人姓名，支持包含匹配")
+            @RequestParam(required = false) String receiverName,
+            @Parameter(description = "完整取件码，精确匹配")
+            @RequestParam(required = false) String pickupCode,
+            @Parameter(description = "真实手机后四位，精确匹配")
+            @RequestParam(required = false) String realSuffix,
+            @Parameter(description = "运单号，精确匹配")
+            @RequestParam(required = false) String trackingNo,
+            @Parameter(description = "完整联系号，精确匹配")
+            @RequestParam(required = false) String contactNo,
             @Parameter(description = "状态过滤") @RequestParam(required = false) ParcelStatus status,
             @Parameter(description = "滞留档位过滤") @RequestParam(required = false) OverdueLevel overdue,
             @Parameter(description = "排前缀过滤，如 15-1")
             @RequestParam(required = false) String codePrefix,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ParcelQuery q = new ParcelQuery(keyword, channel, status, overdue, codePrefix, page, size);
+        ParcelQuery q = new ParcelQuery(keyword, channel, receiverName, pickupCode, realSuffix,
+                trackingNo, contactNo, status, overdue, codePrefix, page, size);
         return ApiResponse.ok(PageVO.of(queryService.search(q)));
+    }
+
+    @GetMapping("/{id}/pickup-companions")
+    @Operation(summary = "同客户待取包裹",
+            description = "返回与指定包裹收件人姓名及真实手机尾号均相同的其他在库包裹")
+    public ApiResponse<List<ParcelVO>> pickupCompanions(@PathVariable Long id) {
+        return ApiResponse.ok(queryService.pendingCompanions(id));
     }
 
     @GetMapping("/{id}")

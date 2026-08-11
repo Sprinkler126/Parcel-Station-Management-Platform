@@ -81,6 +81,21 @@ public class ParcelQueryService {
         return assembler.toVOList(parcelRepo.findPendingBySuffix(suffix));
     }
 
+    /**
+     * 取件码命中后追加展示的同客户包裹。
+     * 姓名和真实尾号必须同时相同；任一身份信息缺失时不做推测，避免尾号撞号导致误交付。
+     */
+    public List<ParcelVO> pendingCompanions(Long id) {
+        Parcel source = require(id);
+        if (source.getStatus() != ParcelStatus.PENDING
+                || source.getReceiverName() == null || source.getReceiverName().isBlank()
+                || source.getRealSuffix() == null || source.getRealSuffix().isBlank()) {
+            return List.of();
+        }
+        return assembler.toVOList(parcelRepo
+                .findPendingCompanions(source.getReceiverName(), source.getRealSuffix(), id));
+    }
+
     // =========================================================================
     // Specification 拼装
     // =========================================================================
@@ -100,6 +115,23 @@ public class ParcelQueryService {
                     default -> ps.add(cb.equal(root.get("trackingNo"), term));
                 }
             }
+            if (q.receiverName() != null) {
+                ps.add(cb.like(root.get("receiverName"),
+                        "%" + escapeLike(q.receiverName()) + "%", '\\'));
+            }
+            if (q.pickupCode() != null) {
+                ps.add(cb.equal(root.get("pickupCode"),
+                        SearchChannel.PICKUP_CODE.normalizeTerm(q.pickupCode())));
+            }
+            if (q.realSuffix() != null) {
+                ps.add(cb.equal(root.get("realSuffix"), q.realSuffix()));
+            }
+            if (q.trackingNo() != null) {
+                ps.add(cb.equal(root.get("trackingNo"), q.trackingNo()));
+            }
+            if (q.contactNo() != null) {
+                ps.add(cb.equal(root.get("contactNo"), q.contactNo()));
+            }
             if (q.status() != null) {
                 ps.add(cb.equal(root.get("status"), q.status()));
             }
@@ -118,6 +150,12 @@ public class ParcelQueryService {
             cq.orderBy(inStockFirst, cb.asc(root.get("inboundAt")), cb.asc(root.get("id")));
             return cb.and(ps.toArray(new Predicate[0]));
         };
+    }
+
+    private static String escapeLike(String value) {
+        return value.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 
     /**

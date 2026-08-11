@@ -114,7 +114,7 @@ class InboundApiTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("F1 MANUAL 模式：归一化后落库，15-1-0731 存为 15-1-731")
+    @DisplayName("F1 MANUAL 模式：归一化后落库，但不推进 AUTO 游标")
     void inboundManualCodeNormalized() throws Exception {
         Map<String, Object> body = inboundBody("SF-MANUAL-001", "15-1");
         body.put("codeMode", "MANUAL");
@@ -126,6 +126,8 @@ class InboundApiTest extends BaseIntegrationTest {
                 .andExpect(jsonPath("$.data.pickupCode").value("15-1-731"))
                 .andExpect(jsonPath("$.data.codeSeq").value(731))
                 .andExpect(jsonPath("$.data.codeSource").value("MANUAL"));
+
+        assertThat(spaceRepo.findById("15-1").orElseThrow().getCursorPos()).isZero();
     }
 
     @Test

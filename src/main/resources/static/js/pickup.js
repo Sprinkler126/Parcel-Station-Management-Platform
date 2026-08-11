@@ -22,6 +22,8 @@
     document.querySelector("#pickupEmpty").hidden = false;
     document.querySelector("#pickupActions").hidden = true;
     document.querySelector("#resultCount").textContent = "0 件";
+    document.querySelector("#resultHeading").textContent = "待核对包裹";
+    document.querySelector("#companionHint").hidden = true;
   }
 
   function overdue(item) {
@@ -30,12 +32,18 @@
     return `<span class="tag tag-ok">正常</span>`;
   }
 
-  function render(items) {
+  function render(items, primaryId = null, companionIds = new Set()) {
     parcels = items;
     if (!items.length) { clearResults("没有找到仍在库的匹配包裹，请核对输入或改用运单号查询"); return; }
     document.querySelector("#pickupEmpty").hidden = true;
     document.querySelector("#resultCount").textContent = `${items.length} 件`;
-    results.innerHTML = items.map(item => `<label class="pickup-item"><input type="checkbox" data-id="${item.id}" checked><span class="pickup-check">✓</span><span class="pickup-main"><span><strong class="pickup-code">${escapeHtml(item.pickupCode)}</strong>${overdue(item)}${item.reuseForced ? `<span class="tag tag-alert">提前复用码</span>` : ""}</span><span class="pickup-person">${escapeHtml(item.receiverName || "未填姓名")} · ${escapeHtml(item.contactMasked)}</span><span class="muted small">${escapeHtml(item.courier)} · 运单尾号 ${escapeHtml(item.trackingTail)} · ${formatTime(item.inboundAt)} · ${escapeHtml(item.overdueText)}</span></span></label>`).join("");
+    document.querySelector("#resultHeading").textContent = companionIds.size ? "本件与同客户包裹" : "待核对包裹";
+    document.querySelector("#companionHint").hidden = companionIds.size === 0;
+    results.innerHTML = items.map(item => {
+      const isCompanion = companionIds.has(item.id);
+      const checked = primaryId === null || item.id === primaryId;
+      return `<label class="pickup-item"><input type="checkbox" data-id="${item.id}" ${checked ? "checked" : ""}><span class="pickup-check">✓</span><span class="pickup-main"><span><strong class="pickup-code">${escapeHtml(item.pickupCode)}</strong>${isCompanion ? `<span class="tag">同客户追加</span>` : ""}${overdue(item)}${item.reuseForced ? `<span class="tag tag-alert">提前复用码</span>` : ""}</span><span class="pickup-person">${escapeHtml(item.receiverName || "未填姓名")} · ${escapeHtml(item.contactMasked)}</span><span class="muted small">${escapeHtml(item.courier)} · 运单尾号 ${escapeHtml(item.trackingTail)} · ${formatTime(item.inboundAt)} · ${escapeHtml(item.overdueText)}</span></span></label>`;
+    }).join("");
     document.querySelector("#pickupActions").hidden = false;
     updateSelection();
   }
@@ -51,7 +59,13 @@
     setBusy(button, true, "查询中…");
     try {
       const page = await api(`/parcels${queryString({ keyword, channel, status: "PENDING", page: 0, size: 200 })}`);
-      render(page.content);
+      if (channel === "PICKUP_CODE" && page.content.length === 1) {
+        const primary = page.content[0];
+        const companions = await api(`/parcels/${primary.id}/pickup-companions`);
+        render([primary, ...companions], primary.id, new Set(companions.map(item => item.id)));
+      } else {
+        render(page.content);
+      }
     } catch (error) { clearResults("查询失败"); toast(errorMessage(error), "error"); }
     finally { setBusy(button, false); }
   }
