@@ -173,8 +173,8 @@ public class ParcelController {
     }
 
     @PostMapping("/{id}/undo-inbound")
-    @Operation(summary = "撤销上一件入库",
-            description = "连续入库页的高频操作。以拒收退回表达而非物理删除，保全流水完整性")
+    @Operation(summary = "撤销入库",
+            description = "可撤销任一仍在库的入库记录；以拒收退回表达而非物理删除，保全流水完整性")
     public ApiResponse<ParcelVO> undoInbound(@PathVariable Long id,
                                              @Valid @RequestBody(required = false) OperationRequest req) {
         return ApiResponse.ok(pickupService.undoInbound(id, operator(req)));

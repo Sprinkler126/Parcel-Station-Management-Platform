@@ -8,8 +8,10 @@
   const prefixField = document.querySelector("#prefixField");
   const pickupCode = document.querySelector("#pickupCode");
   const submit = document.querySelector("#submitButton");
+  const resultList = document.querySelector("#resultStack");
   let mode = "AUTO";
-  const resultStack = [];
+  // 只按最新优先展示；它是本次入库记录，不是只能操作栈顶的栈。
+  const sessionResults = [];
   let codeSpaces = [];
   let selectedShelf = "15";
 
@@ -132,15 +134,13 @@
     }
   }
 
-  function renderResultStack() {
-    const container = document.querySelector("#resultStack");
-    const items = [...resultStack].reverse();
+  function renderSessionResults() {
+    const items = [...sessionResults].reverse();
     document.querySelector("#emptyResult").hidden = items.length > 0;
-    document.querySelector("#stackActions").classList.toggle("is-hidden", items.length === 0);
     document.querySelector("#sessionCount").textContent = `本班次 ${items.length} 件`;
-    container.innerHTML = items.map((item, index) => {
+    resultList.innerHTML = items.map((item, index) => {
       const latest = index === 0;
-      return `<article class="session-result-item ${latest ? "is-latest" : ""}"><div class="session-result-head"><span class="session-result-index">${latest ? "STACK TOP / 最新" : "已完成入库"}</span><span class="session-result-position">${items.length - index}</span></div><div class="session-result-code">${escapeHtml(item.pickupCode)}</div><p class="session-result-meta">${escapeHtml(item.courier)} · 运单尾号 ${escapeHtml(item.trackingTail)} · ${escapeHtml(formatTime(item.inboundAt))}</p></article>`;
+      return `<article class="session-result-item ${latest ? "is-latest" : ""}"><div class="session-result-head"><span class="session-result-index">${latest ? "最新入库" : "已完成入库"}</span><span class="session-result-position">${items.length - index}</span></div><div class="session-result-code">${escapeHtml(item.pickupCode)}</div><p class="session-result-meta">${escapeHtml(item.courier)} · 运单尾号 ${escapeHtml(item.trackingTail)} · ${escapeHtml(formatTime(item.inboundAt))}</p><div class="session-result-actions"><button class="btn btn-sm btn-danger" type="button" data-undo-inbound="${item.id}" data-pickup-code="${escapeHtml(item.pickupCode)}">撤销本件入库</button></div></article>`;
     }).join("");
   }
 
@@ -178,8 +178,8 @@
     setBusy(submit, true, "正在入库…");
     try {
       const parcel = await api("/parcels", { method: "POST", body: JSON.stringify(payload) });
-      resultStack.push(parcel);
-      renderResultStack();
+      sessionResults.push(parcel);
+      renderSessionResults();
       toast(`入库成功：${parcel.pickupCode}`);
       ["trackingNo", "contactNo", "receiverName", "remark", "pickupCode"].forEach(name => { const el = form.elements[name]; if (el) el.value = ""; });
       trackingNo.focus();
@@ -192,16 +192,18 @@
     }
   });
 
-  document.querySelector("#undoButton").addEventListener("click", async event => {
-    const lastParcel = resultStack.at(-1);
-    if (!lastParcel || !confirm(`确认撤销栈顶 ${lastParcel.pickupCode} 的入库？`)) return;
-    const button = event.currentTarget;
+  resultList.addEventListener("click", async event => {
+    const button = event.target.closest("button[data-undo-inbound]");
+    if (!button) return;
+    const id = Number(button.dataset.undoInbound);
+    const parcel = sessionResults.find(item => item.id === id);
+    if (!parcel || !confirm(`确认撤销 ${parcel.pickupCode} 的入库？`)) return;
     setBusy(button, true, "撤销中…");
     try {
-      await api(`/parcels/${lastParcel.id}/undo-inbound`, { method: "POST", body: JSON.stringify({ operator: operator.value || null }) });
-      toast(`已撤销 ${lastParcel.pickupCode}`);
-      resultStack.pop();
-      renderResultStack();
+      await api(`/parcels/${parcel.id}/undo-inbound`, { method: "POST", body: JSON.stringify({ operator: operator.value || null }) });
+      toast(`已撤销 ${parcel.pickupCode}`);
+      sessionResults.splice(sessionResults.findIndex(item => item.id === parcel.id), 1);
+      renderSessionResults();
       loadPreview();
     } catch (error) { toast(errorMessage(error), "error"); }
     finally { setBusy(button, false); }

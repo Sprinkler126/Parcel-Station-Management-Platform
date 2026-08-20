@@ -13,7 +13,7 @@
 - 指定排时通过“货架 → 排号”二级方格选择，选项来自站点当前启用的货架配置。
 - 入库前实时预览推荐码；手动码发生占用或冷却冲突时返回明确原因和建议码。
 - 提交成功后保留快递公司、操作员和货架选择，只清空本件信息，适合连续扫码作业。
-- 本班次结果以栈形式保留，最新一单位于栈顶；撤销操作只作用于栈顶记录。
+- 本班次入库记录按最新优先展示；每一件仍在库的包裹都可单独撤销。
 
 ![连续入库](docs/screenshots/continuous-inbound.png)
 
@@ -117,27 +117,27 @@ target = clamp(raw, minDays, maxDays)
 
 ## 快速启动
 
-### 使用内置 H2
+### 默认使用 MySQL Docker
 
 环境要求：JDK 17+、Maven 3.9+。
 
 ```bash
+docker compose up -d
 mvn spring-boot:run
 ```
 
-### 使用 MySQL Docker
+默认数据库地址为 `localhost:3306/station`，用户名和密码均为 `root`。首次启动时 Flyway 会自动创建表结构。
+
+### 连接其他 MySQL
 
 ```bash
-docker run --name parcel-station-mysql \
-  -e MYSQL_ROOT_PASSWORD=root \
-  -e MYSQL_DATABASE=station \
-  -p 3306:3306 -d mysql:8.4
-
-mvn spring-boot:run -Dspring-boot.run.profiles=mysql
+MYSQL_HOST=example.com MYSQL_PORT=3306 MYSQL_DB=station \
+MYSQL_USER=your_user MYSQL_PASSWORD=your_password \
+mvn spring-boot:run
 ```
 
 MySQL 连接信息可以通过 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DB`、`MYSQL_USER`、
-`MYSQL_PASSWORD` 环境变量覆盖。首次启动时 Flyway 会自动创建表结构。
+`MYSQL_PASSWORD` 环境变量覆盖。
 
 启动后可访问：
 

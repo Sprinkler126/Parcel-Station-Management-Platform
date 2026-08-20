@@ -215,7 +215,7 @@ public class PickupAppService {
         return sb.toString();
     }
 
-    /** 供前端"撤销上一件"使用：只允许撤销仍在库的最近一件 */
+    /** 供前端撤销本次任一入库记录：只允许撤销仍在库的包裹。 */
     public ParcelVO undoInbound(Long id, String operator) {
         Parcel p = parcelRepo.findById(id)
                 .orElseThrow(() -> new BizException(ErrorCode.NOT_FOUND, "包裹不存在：" + id));

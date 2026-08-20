@@ -442,6 +442,7 @@ td { border-bottom:1px solid #ccc6bf; }
 .session-result-meta { margin:0; color:#68635e; font-size:12px; line-height:1.5; }
 .session-result-item.is-latest .session-result-meta { color:#bdb8b2; }
 .session-result-position { flex:0 0 auto; display:grid; place-items:center; min-width:28px; height:28px; border:1px solid currentColor; font-size:11px; font-weight:800; }
+.session-result-actions { display:flex; justify-content:flex-end; margin-top:14px; }
 
 /* Landing */
 .landing-hero {

@@ -141,7 +141,7 @@
 | --- | --- | --- | --- |
 | POST | `/parcels/{id}/cancel-pickup` | `OperationRequest` | 撤销取件并恢复 `PENDING` |
 | POST | `/parcels/{id}/return` | `OperationRequest` | 拒收退回 |
-| POST | `/parcels/{id}/undo-inbound` | `OperationRequest` | 撤销上一件入库，不物理删除 |
+| POST | `/parcels/{id}/undo-inbound` | `OperationRequest` | 撤销任一仍在库的入库记录，不物理删除 |
 | POST | `/parcels/{id}/urge` | `OperationRequest` | 记录一次催取 |
 | POST | `/parcels/{id}/remark` | `OperationRequest` | 添加/更新异常备注 |
 
