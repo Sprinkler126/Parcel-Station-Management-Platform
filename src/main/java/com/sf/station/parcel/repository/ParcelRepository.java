@@ -24,6 +24,12 @@ import org.springframework.data.repository.query.Param;
 public interface ParcelRepository extends JpaRepository<Parcel, Long>,
         JpaSpecificationExecutor<Parcel> {
 
+    interface PrefixOccupiedCount {
+        String getCodePrefix();
+
+        long getOccupiedCount();
+    }
+
     // =========================================================================
     // 分配路径：位图加载
     // =========================================================================
@@ -278,6 +284,19 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long>,
     /** 停用前必须确认没有任何在库或冷却槽位。 */
     @Query("select count(p) from Parcel p where p.codePrefix = :prefix and p.codeSlotFlag = 1")
     long countHeldSlotsByPrefix(@Param("prefix") String prefix);
+
+    /**
+     * 负载均衡用的全站占用量快照。只返回每排一个计数，不加载排内序号。
+     *
+     * <p>这里刻意按 {@code codeSlotFlag} 做近似统计：刚过冷却期但尚未被回炉任务
+     * 清理的槽位可能被短暂计入，但选排本身是启发式的，不影响后续精确位图分配。
+     */
+    @Query("""
+            select p.codePrefix as codePrefix, count(p) as occupiedCount from Parcel p
+            where p.codeSlotFlag = 1
+            group by p.codePrefix
+            """)
+    List<PrefixOccupiedCount> countHeldSlotsGroupedByPrefix();
 
     /** 近 N 天该排的每日入库计数，用于 EWMA */
     @Query("""

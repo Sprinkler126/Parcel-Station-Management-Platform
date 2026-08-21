@@ -53,8 +53,8 @@ public class CodeAllocationService {
         AllocScope s = scope == null ? AllocScope.ROW : scope;
         return switch (s) {
             case ROW -> requireEnabled(codePrefix);
-            case SHELF -> pickLeastOccupied(shelfRows(codePrefix), now);
-            case FULL -> pickLeastOccupied(spaceRepo.findAllEnabled(), now);
+            case SHELF -> pickLeastOccupied(shelfRows(codePrefix));
+            case FULL -> pickLeastOccupied(spaceRepo.findAllEnabled());
         };
     }
 
@@ -86,17 +86,21 @@ public class CodeAllocationService {
     }
 
     /** 挑占用率最低的一排，使各排负载均衡 */
-    private CodeSpace pickLeastOccupied(List<CodeSpace> spaces, LocalDateTime now) {
+    private CodeSpace pickLeastOccupied(List<CodeSpace> spaces) {
         if (spaces == null || spaces.isEmpty()) {
             throw new BizException(ErrorCode.NOT_FOUND, "没有可用的货架排");
         }
+        Map<String, Long> occupiedByPrefix = new LinkedHashMap<>();
+        for (ParcelRepository.PrefixOccupiedCount count : parcelRepo.countHeldSlotsGroupedByPrefix()) {
+            occupiedByPrefix.put(count.getCodePrefix(), count.getOccupiedCount());
+        }
         return spaces.stream()
-                .min(Comparator.comparingDouble(sp -> occupancyRatio(sp, now)))
+                .min(Comparator.comparingDouble(sp -> occupancyRatio(sp, occupiedByPrefix)))
                 .orElseThrow();
     }
 
-    private double occupancyRatio(CodeSpace space, LocalDateTime now) {
-        int occupied = occupiedSeqs(space, now).size();
+    private double occupancyRatio(CodeSpace space, Map<String, Long> occupiedByPrefix) {
+        long occupied = occupiedByPrefix.getOrDefault(space.getPrefix(), 0L);
         return space.getCapacity() == 0 ? 1.0 : (double) occupied / space.getCapacity();
     }
 
